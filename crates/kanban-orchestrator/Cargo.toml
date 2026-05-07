@@ -32,3 +32,4 @@ test-utils = []
 wiremock = "0.6"
 tokio = { workspace = true, features = ["test-util", "macros"] }
 tempfile = "3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

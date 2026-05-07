@@ -6,7 +6,6 @@
 
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use db::models::task::Task;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
@@ -118,11 +117,14 @@ pub async fn do_tick(ctx: &OrchestratorContext) -> crate::Result<()> {
 // ---------------------------------------------------------------------------
 
 async fn dispatch_round(ctx: &OrchestratorContext) -> crate::Result<()> {
+    // UUIDs in the orchestrator are stored as TEXT (hyphenated string) to be
+    // consistent with the common test infrastructure and the reconciler inserts.
+    let project_id_str = ctx.project_id.to_string();
     let rows: Vec<(String, String)> = sqlx::query_as(
         "SELECT id, kanban_phase FROM tasks \
          WHERE phase_state = 'idle' AND kanban_phase IS NOT NULL AND project_id = ?",
     )
-    .bind(ctx.project_id.to_string())
+    .bind(&project_id_str)
     .fetch_all(&ctx.pool)
     .await?;
 
@@ -168,9 +170,50 @@ async fn dispatch_round(ctx: &OrchestratorContext) -> crate::Result<()> {
 // run_one_phase — execute one full phase cycle for a single card
 // ---------------------------------------------------------------------------
 
+/// Lightweight row fetched by text UUID to avoid BLOB/TEXT type mismatch.
+/// The orchestrator inserts task IDs as TEXT; sqlx's `Task::find_by_id` uses
+/// a compiled macro that binds UUID as BLOB, so we use a plain text query.
+struct CardRow {
+    id: Uuid,
+    title: String,
+    kanban_phase: Option<String>,
+    jira_key: Option<String>,
+    current_turn: i64,
+    pending_inject: Option<String>,
+}
+
+async fn fetch_card_by_text_id(pool: &SqlitePool, task_id: Uuid) -> crate::Result<Option<CardRow>> {
+    let id_str = task_id.to_string();
+    let row: Option<(
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        i64,
+        Option<String>,
+    )> = sqlx::query_as(
+        "SELECT id, title, kanban_phase, jira_key, current_turn, pending_inject \
+             FROM tasks WHERE id = ?",
+    )
+    .bind(&id_str)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.map(
+        |(id_s, title, kanban_phase, jira_key, current_turn, pending_inject)| CardRow {
+            id: Uuid::parse_str(&id_s).unwrap_or(task_id),
+            title,
+            kanban_phase,
+            jira_key,
+            current_turn,
+            pending_inject,
+        },
+    ))
+}
+
 async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Result<()> {
-    // Load the card — bail out silently if it was deleted
-    let card: Task = match Task::find_by_id(&ctx.pool, task_id).await? {
+    // Load the card via text-based query (orchestrator stores IDs as TEXT)
+    let card = match fetch_card_by_text_id(&ctx.pool, task_id).await? {
         Some(c) => c,
         None => return Ok(()),
     };
@@ -193,9 +236,11 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
         .join(format!(".agents/agent/{}.md", agent_name));
     let worktree = ctx.repo_root.join(format!("worktrees/{}", task_id));
 
+    let id_str = task_id.to_string();
+
     // --- Mark running ---
     sqlx::query("UPDATE tasks SET phase_state = 'running' WHERE id = ?")
-        .bind(task_id.to_string())
+        .bind(&id_str)
         .execute(&ctx.pool)
         .await?;
     crate::events::emit(
@@ -217,13 +262,16 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
     // Consume and clear any queued inject blob
     let pending_inject = card.pending_inject.clone();
     sqlx::query("UPDATE tasks SET pending_inject = NULL WHERE id = ?")
-        .bind(task_id.to_string())
+        .bind(&id_str)
         .execute(&ctx.pool)
         .await?;
 
+    // Build a minimal Task struct for PhaseInputs (only fields used by context writer)
+    let task_for_phase = make_task_for_phase(&card);
+
     let cancel = Arc::new(tokio::sync::Notify::new());
     let inputs = PhaseInputs {
-        card: &card,
+        card: &task_for_phase,
         column: &column,
         worktree: &worktree,
         agent_md: &agent_md,
@@ -263,7 +311,7 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
             )
             .bind(turns_used as i64)
             .bind(last_session.to_string())
-            .bind(task_id.to_string())
+            .bind(&id_str)
             .execute(&ctx.pool)
             .await?;
 
@@ -291,7 +339,7 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
             )
             .bind(info.to_string())
             .bind(turns_used as i64)
-            .bind(task_id.to_string())
+            .bind(&id_str)
             .execute(&ctx.pool)
             .await?;
 
@@ -314,13 +362,38 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
         }
         PhaseOutcome::Cancelled => {
             sqlx::query("UPDATE tasks SET phase_state = 'archived' WHERE id = ?")
-                .bind(task_id.to_string())
+                .bind(&id_str)
                 .execute(&ctx.pool)
                 .await?;
         }
     }
 
     Ok(())
+}
+
+/// Build a minimal `db::models::task::Task` from `CardRow` for use in `PhaseInputs`.
+/// Only the fields consumed by `write_context` and `append_history` need to be correct.
+fn make_task_for_phase(card: &CardRow) -> db::models::task::Task {
+    db::models::task::Task {
+        id: card.id,
+        project_id: Uuid::nil(), // not used by context writer
+        title: card.title.clone(),
+        description: None,
+        status: db::models::task::TaskStatus::InProgress,
+        parent_workspace_id: None,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        jira_key: card.jira_key.clone(),
+        jira_snapshot: None,
+        jira_synced_at: None,
+        kanban_phase: card.kanban_phase.clone(),
+        phase_state: db::models::task::PhaseState::Running,
+        current_turn: card.current_turn,
+        last_executor_session_id: None,
+        review_pending_since: None,
+        error_info: None,
+        pending_inject: None,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -359,7 +432,7 @@ pub async fn run_hook_for_test(cmd: &str, cwd: &std::path::Path) -> crate::Resul
 
 async fn advance_card(
     ctx: &OrchestratorContext,
-    card: &Task,
+    card: &CardRow,
     column: &crate::config::Column,
     turns_used: u32,
     last_session: Uuid,
@@ -367,6 +440,8 @@ async fn advance_card(
     let next = column.next.as_deref().ok_or_else(|| {
         crate::OrchestratorError::Workflow("non-terminal column missing next".into())
     })?;
+
+    let id_str = card.id.to_string();
 
     // Attempt Jira transition (log but don't abort on failure)
     if let Some(transition) = column.jira_transition.as_deref() {
@@ -378,7 +453,7 @@ async fn advance_card(
                 });
                 sqlx::query("UPDATE tasks SET error_info = ? WHERE id = ?")
                     .bind(info.to_string())
-                    .bind(card.id.to_string())
+                    .bind(&id_str)
                     .execute(&ctx.pool)
                     .await?;
             }
@@ -393,7 +468,7 @@ async fn advance_card(
     )
     .bind(next)
     .bind(last_session.to_string())
-    .bind(card.id.to_string())
+    .bind(&id_str)
     .execute(&ctx.pool)
     .await?;
 

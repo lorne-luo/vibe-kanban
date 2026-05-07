@@ -4777,6 +4777,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-subscriber",
  "utils",
  "uuid",
  "wiremock",
