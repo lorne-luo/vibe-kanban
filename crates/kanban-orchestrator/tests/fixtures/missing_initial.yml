@@ -15,7 +15,6 @@ sync:
 columns:
   - name: Todo
     jira_status: ["To Do", "Open", "Backlog"]
-    initial: true
     next: Analyzing
 
   - name: Analyzing

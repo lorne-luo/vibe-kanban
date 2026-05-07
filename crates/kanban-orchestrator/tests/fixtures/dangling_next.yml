@@ -16,12 +16,11 @@ columns:
   - name: Todo
     jira_status: ["To Do", "Open", "Backlog"]
     initial: true
-    next: Analyzing
 
   - name: Analyzing
     agent: analyzer
     on_complete: review
-    next: Coding
+    next: NotAColumn
     jira_transition: "Start Progress"
 
   - name: Coding

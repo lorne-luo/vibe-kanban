@@ -107,3 +107,61 @@ pub struct Hooks {
     pub post_complete: Option<String>,
     pub on_error: Option<String>,
 }
+
+impl Workflow {
+    pub fn validate(
+        &self,
+        known_agents: &[&str],
+        env_present: &dyn Fn(&str) -> bool,
+    ) -> std::result::Result<(), String> {
+        if self.version != 1 {
+            return Err(format!("unsupported version {}", self.version));
+        }
+        let initials = self.columns.iter().filter(|c| c.initial.unwrap_or(false)).count();
+        if initials != 1 {
+            return Err("exactly one column must have initial: true".into());
+        }
+        if !self.columns.iter().any(|c| c.terminal.unwrap_or(false)) {
+            return Err("at least one terminal column required".into());
+        }
+        let names: std::collections::HashSet<&str> =
+            self.columns.iter().map(|c| c.name.as_str()).collect();
+        for c in &self.columns {
+            let is_terminal = c.terminal.unwrap_or(false);
+            if !is_terminal {
+                let next = c.next.as_deref().ok_or_else(|| {
+                    format!("column '{}' missing next", c.name)
+                })?;
+                if !names.contains(next) {
+                    return Err(format!(
+                        "column '{}' next='{}' not found in columns",
+                        c.name, next
+                    ));
+                }
+            }
+            if let Some(a) = &c.agent {
+                if !known_agents.contains(&a.as_str()) {
+                    return Err(format!(
+                        "column '{}' agent file .agents/agent/{}.md missing",
+                        c.name, a
+                    ));
+                }
+            }
+        }
+        if !env_present(&self.sync.jira.auth_env.email) {
+            return Err(format!("env var {} not set", self.sync.jira.auth_env.email));
+        }
+        if !env_present(&self.sync.jira.auth_env.token) {
+            return Err(format!("env var {} not set", self.sync.jira.auth_env.token));
+        }
+        Ok(())
+    }
+
+    pub fn initial_column(&self) -> Option<&Column> {
+        self.columns.iter().find(|c| c.initial.unwrap_or(false))
+    }
+
+    pub fn column(&self, name: &str) -> Option<&Column> {
+        self.columns.iter().find(|c| c.name == name)
+    }
+}
