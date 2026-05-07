@@ -234,6 +234,11 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
         cancel,
     };
 
+    // Pre-dispatch hook (fatal — abort phase if hook fails)
+    if let Some(pre) = ctx.workflow.hooks.pre_dispatch.as_deref() {
+        run_hook(pre, &worktree).await?;
+    }
+
     let outcome = run_phase(inputs, ctx.executor.as_ref()).await?;
 
     match outcome {
@@ -242,6 +247,10 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
             last_session,
         } => {
             advance_card(ctx, &card, &column, turns_used, last_session).await?;
+            // Post-complete hook (non-fatal)
+            if let Some(post) = ctx.workflow.hooks.post_complete.as_deref() {
+                let _ = run_hook(post, &worktree).await;
+            }
         }
         PhaseOutcome::AwaitingReview {
             turns_used,
@@ -298,6 +307,10 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
                 Some(&info),
             )
             .await?;
+            // On-error hook (non-fatal)
+            if let Some(on_err) = ctx.workflow.hooks.on_error.as_deref() {
+                let _ = run_hook(on_err, &worktree).await;
+            }
         }
         PhaseOutcome::Cancelled => {
             sqlx::query("UPDATE tasks SET phase_state = 'archived' WHERE id = ?")
@@ -308,6 +321,36 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
     }
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// run_hook — execute a shell hook command in the given working directory
+// ---------------------------------------------------------------------------
+
+async fn run_hook(cmd: &str, cwd: &std::path::Path) -> crate::Result<()> {
+    if cmd.is_empty() {
+        return Ok(());
+    }
+    let status = tokio::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .current_dir(cwd)
+        .status()
+        .await
+        .map_err(crate::OrchestratorError::Io)?;
+    if !status.success() {
+        return Err(crate::OrchestratorError::Workflow(format!(
+            "hook failed: {}",
+            cmd
+        )));
+    }
+    Ok(())
+}
+
+/// Public test shim so integration tests can call `run_hook` directly.
+#[cfg(feature = "test-utils")]
+pub async fn run_hook_for_test(cmd: &str, cwd: &std::path::Path) -> crate::Result<()> {
+    run_hook(cmd, cwd).await
 }
 
 // ---------------------------------------------------------------------------
