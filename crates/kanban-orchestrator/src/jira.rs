@@ -64,6 +64,45 @@ pub struct JiraAttachment {
     pub filename: String,
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct JiraDiff {
+    pub status_changed: bool,
+    pub status_terminal: bool,
+    pub assignee_changed: bool,
+    pub summary_changed: bool,
+    pub new_comments: Vec<JiraComment>,
+    pub description_changed: bool,
+}
+
+pub const TERMINAL_STATUSES: &[&str] = &["Done", "Closed", "Cancelled", "Resolved"];
+
+pub fn diff_issue(prev: &JiraIssue, curr: &JiraIssue) -> JiraDiff {
+    let prev_ids: std::collections::HashSet<&str> = prev
+        .fields
+        .comment
+        .comments
+        .iter()
+        .map(|c| c.id.as_str())
+        .collect();
+    let new_comments: Vec<JiraComment> = curr
+        .fields
+        .comment
+        .comments
+        .iter()
+        .filter(|c| !prev_ids.contains(c.id.as_str()))
+        .cloned()
+        .collect();
+    JiraDiff {
+        status_changed: prev.fields.status.name != curr.fields.status.name,
+        status_terminal: TERMINAL_STATUSES.contains(&curr.fields.status.name.as_str()),
+        assignee_changed: prev.fields.assignee.as_ref().map(|u| &u.account_id)
+            != curr.fields.assignee.as_ref().map(|u| &u.account_id),
+        summary_changed: prev.fields.summary != curr.fields.summary,
+        new_comments,
+        description_changed: prev.fields.description != curr.fields.description,
+    }
+}
+
 impl JiraClient {
     pub fn new(base: String, email: String, token: String) -> Self {
         Self {

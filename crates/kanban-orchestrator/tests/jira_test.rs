@@ -49,3 +49,58 @@ async fn transition_resolves_id_then_posts() {
     let c = JiraClient::new(server.uri(), "e".into(), "t".into());
     c.transition("AP-1", "Done").await.unwrap();
 }
+
+fn sample_issue() -> kanban_orchestrator::jira::JiraIssue {
+    kanban_orchestrator::jira::JiraIssue {
+        key: "AP-1".into(),
+        fields: kanban_orchestrator::jira::JiraFields {
+            summary: "Test issue".into(),
+            status: kanban_orchestrator::jira::JiraNamed { name: "To Do".into() },
+            assignee: Some(kanban_orchestrator::jira::JiraUser {
+                account_id: "user1".into(),
+                display_name: "User One".into(),
+            }),
+            description: None,
+            labels: vec![],
+            priority: None,
+            comment: kanban_orchestrator::jira::JiraComments {
+                comments: vec![sample_comment("c1")],
+            },
+            attachment: vec![],
+        },
+    }
+}
+
+fn sample_comment(id: &str) -> kanban_orchestrator::jira::JiraComment {
+    kanban_orchestrator::jira::JiraComment {
+        id: id.into(),
+        body: serde_json::Value::Null,
+        updated: "2026-05-07T00:00:00Z".into(),
+    }
+}
+
+#[test]
+fn diff_detects_new_comment_and_status() {
+    use kanban_orchestrator::jira::{diff_issue, JiraDiff};
+    let a = sample_issue();
+    let mut b = a.clone();
+    b.fields.status.name = "Done".into();
+    b.fields.comment.comments.push(sample_comment("c2"));
+    let d = diff_issue(&a, &b);
+    assert!(d.status_changed);
+    assert_eq!(d.new_comments.len(), 1);
+    assert_eq!(d.new_comments[0].id, "c2");
+    assert!(!d.summary_changed);
+    assert!(!d.assignee_changed);
+}
+
+#[test]
+fn diff_detects_terminal_status() {
+    use kanban_orchestrator::jira::{diff_issue, TERMINAL_STATUSES};
+    let a = sample_issue();
+    let mut b = a.clone();
+    b.fields.status.name = "Done".into();
+    let d = diff_issue(&a, &b);
+    assert!(d.status_terminal);
+    assert!(TERMINAL_STATUSES.contains(&"Done"));
+}
