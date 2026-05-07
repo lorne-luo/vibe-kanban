@@ -1,0 +1,27 @@
+[package]
+name = "kanban-orchestrator"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = "0.9"
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+reqwest = { workspace = true }
+async-trait = { workspace = true }
+# Per-crate deps (not in workspace):
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "tls-rustls-aws-lc-rs", "sqlite", "chrono", "uuid", "macros"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+humantime-serde = "1"
+db = { path = "../db" }
+utils = { path = "../utils" }
+
+[dev-dependencies]
+wiremock = "0.6"
+tokio = { workspace = true, features = ["test-util", "macros"] }
+tempfile = "3"
