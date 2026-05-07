@@ -1,3 +1,5 @@
+mod common;
+
 use kanban_orchestrator::config::Reconciliation;
 use kanban_orchestrator::jira::{JiraComment, JiraDiff};
 use kanban_orchestrator::reconciler::{decide_action, ReconcileAction};
@@ -41,4 +43,45 @@ fn always_has_update_snapshot() {
     let cfg = Reconciliation::default();
     let actions = decide_action(&d, &cfg);
     assert!(actions.contains(&ReconcileAction::UpdateSnapshot));
+}
+
+#[tokio::test]
+async fn new_issue_creates_card_in_initial_column() {
+    let pool = common::test_pool().await;
+    let project_id = common::create_project(&pool, "AP").await;
+
+    let workflow_yaml =
+        std::fs::read_to_string("tests/fixtures/valid_workflow.yml").unwrap();
+    let workflow: kanban_orchestrator::config::Workflow =
+        serde_yaml::from_str(&workflow_yaml).unwrap();
+
+    let issue = kanban_orchestrator::jira::JiraIssue {
+        key: "AP-42".into(),
+        fields: kanban_orchestrator::jira::JiraFields {
+            summary: "Test card".into(),
+            status: kanban_orchestrator::jira::JiraNamed {
+                name: "To Do".into(),
+            },
+            assignee: None,
+            description: None,
+            labels: vec![],
+            priority: None,
+            comment: kanban_orchestrator::jira::JiraComments {
+                comments: vec![],
+            },
+            attachment: vec![],
+        },
+    };
+
+    let outcome = kanban_orchestrator::reconciler::upsert_card_from_jira(
+        &pool,
+        project_id,
+        &workflow,
+        &issue,
+    )
+    .await
+    .unwrap();
+
+    assert!(outcome.created);
+    assert_eq!(outcome.kanban_phase, Some("Todo".to_string()));
 }
