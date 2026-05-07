@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 api-types = { path = "../api-types" }
 db = { path = "../db" }
+kanban-orchestrator = { path = "../kanban-orchestrator" }
 executors = { path="../executors" }
 deployment = { path = "../deployment" }
 embedded-ssh = { path = "../embedded-ssh" }
