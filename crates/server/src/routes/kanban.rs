@@ -90,6 +90,30 @@ async fn retry_task(
         })
 }
 
+/// Immediately fire the scheduler tick for the given project.
+/// The project_id path param is accepted for API consistency but the
+/// orchestrator currently runs a single global tick; we simply fire the
+/// ManualTrigger so it runs on the next scheduler loop iteration.
+async fn poll_now(
+    State(deployment): State<DeploymentImpl>,
+    Path(_project_id): Path<Uuid>,
+) -> ResponseJson<ApiResponse<()>> {
+    deployment.kanban().trigger.fire();
+    ResponseJson(ApiResponse::success(()))
+}
+
+/// Immediately re-sync a single task from Jira.  Like poll_now, this fires
+/// the global trigger so the next tick re-reconciles all cards including the
+/// requested one.  A task-scoped sync would require the full Jira client here;
+/// firing the trigger is the minimal correct behaviour for now.
+async fn sync_now(
+    State(deployment): State<DeploymentImpl>,
+    Path(_task_id): Path<Uuid>,
+) -> ResponseJson<ApiResponse<()>> {
+    deployment.kanban().trigger.fire();
+    ResponseJson(ApiResponse::success(()))
+}
+
 pub(super) fn router(deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
     Router::new()
         .route("/kanban/status", axum::routing::get(get_status))
@@ -100,5 +124,7 @@ pub(super) fn router(deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
         )
         .route("/kanban/tasks/{task_id}/cancel", delete(archive_task))
         .route("/kanban/tasks/{task_id}/retry", post(retry_task))
+        .route("/kanban/projects/{project_id}/poll_now", post(poll_now))
+        .route("/kanban/tasks/{task_id}/sync_now", post(sync_now))
         .with_state(deployment.clone())
 }

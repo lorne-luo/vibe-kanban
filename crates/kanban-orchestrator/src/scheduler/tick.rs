@@ -266,6 +266,11 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
         .execute(&ctx.pool)
         .await?;
 
+    // Route pending_inject to either reconcile_blob or review_feedback depending
+    // on whether it was written by request_changes (prefixed sentinel) or the
+    // Jira reconciler (plain text).
+    let (reconcile_blob, review_feedback) = split_pending_inject(pending_inject);
+
     // Build a minimal Task struct for PhaseInputs (only fields used by context writer)
     let task_for_phase = make_task_for_phase(&card);
 
@@ -277,8 +282,8 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
         agent_md: &agent_md,
         max_turns,
         turn_timeout: Duration::from_secs(60 * 30),
-        reconcile_blob: pending_inject,
-        review_feedback: None,
+        reconcile_blob,
+        review_feedback,
         cancel,
     };
 
@@ -393,6 +398,21 @@ fn make_task_for_phase(card: &CardRow) -> db::models::task::Task {
         review_pending_since: None,
         error_info: None,
         pending_inject: None,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// split_pending_inject — route pending_inject to the right PhaseInputs field
+// ---------------------------------------------------------------------------
+
+fn split_pending_inject(pending: Option<String>) -> (Option<String>, Option<String>) {
+    match pending {
+        None => (None, None),
+        Some(s) if s.starts_with(crate::api::REVIEW_FEEDBACK_PREFIX) => {
+            let feedback = s[crate::api::REVIEW_FEEDBACK_PREFIX.len()..].to_string();
+            (None, Some(feedback))
+        }
+        Some(s) => (Some(s), None),
     }
 }
 

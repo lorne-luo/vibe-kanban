@@ -39,14 +39,24 @@ pub async fn approve(pool: &SqlitePool, handle: &KanbanHandle, task_id: Uuid) ->
     Ok(())
 }
 
+/// Sentinel prefix written into `pending_inject` when the content is review
+/// feedback rather than a Jira-reconcile blob.  `tick.rs` inspects this prefix
+/// to route the value to `PhaseInputs::review_feedback` instead of
+/// `PhaseInputs::reconcile_blob`.
+pub(crate) const REVIEW_FEEDBACK_PREFIX: &str = "##REVIEW_FEEDBACK##\n";
+
 pub async fn request_changes(
     pool: &SqlitePool,
     handle: &KanbanHandle,
     task_id: Uuid,
     feedback: &str,
 ) -> crate::Result<()> {
-    // Store review feedback as pending_inject so the dispatcher injects it on next run.
-    let blob = format!("# Review Feedback\n\n{}", feedback);
+    // Prefix the blob so the dispatcher routes it to review_feedback.md, not
+    // reconcile.md.
+    let blob = format!(
+        "{}# Review Feedback\n\n{}",
+        REVIEW_FEEDBACK_PREFIX, feedback
+    );
     sqlx::query(
         "UPDATE tasks SET phase_state='idle', current_turn=0, pending_inject=? \
          WHERE id=? AND phase_state='awaiting_review'",
