@@ -1,3 +1,4 @@
+pub mod gate;
 pub mod markers;
 
 #[async_trait::async_trait]
