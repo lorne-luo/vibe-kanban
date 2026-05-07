@@ -1,18 +1,31 @@
-use crate::config::{Column, OnComplete};
-use crate::context::{append_history, write_context};
-use crate::dispatcher::markers::{parse_markers, MarkerOutcome};
-use crate::dispatcher::{PhaseExecutor, TurnOutcome};
+use std::{path::Path, sync::Arc, time::Duration};
+
 use db::models::task::Task;
-use std::path::Path;
-use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::Notify;
+
+use crate::{
+    config::{Column, OnComplete},
+    context::{append_history, write_context},
+    dispatcher::{
+        PhaseExecutor, TurnOutcome,
+        markers::{MarkerOutcome, parse_markers},
+    },
+};
 
 #[derive(Debug)]
 pub enum PhaseOutcome {
-    Complete { turns_used: u32, last_session: uuid::Uuid },
-    AwaitingReview { turns_used: u32, last_session: uuid::Uuid },
-    Failed { reason: String, turns_used: u32 },
+    Complete {
+        turns_used: u32,
+        last_session: uuid::Uuid,
+    },
+    AwaitingReview {
+        turns_used: u32,
+        last_session: uuid::Uuid,
+    },
+    Failed {
+        reason: String,
+        turns_used: u32,
+    },
     Cancelled,
 }
 
@@ -48,6 +61,23 @@ pub async fn run_phase(
             .run_turn(inputs.worktree, inputs.agent_md, inputs.turn_timeout)
             .await?;
         last_session = out.session_id;
+
+        // Write per-turn log
+        if let Some(jira_key) = inputs.card.jira_key.as_deref() {
+            let log_dir = inputs.worktree.join(format!("logs/{}", jira_key));
+            let _ = std::fs::create_dir_all(&log_dir);
+            let log_path = log_dir.join(format!(
+                "phase-{}-turn-{}.log",
+                inputs.column.name.replace(' ', "_"),
+                turn
+            ));
+            let content = format!(
+                "=== STDOUT ===\n{}\n=== STDERR ===\n{}\n",
+                out.stdout, out.stderr
+            );
+            let _ = std::fs::write(log_path, content);
+        }
+
         match parse_markers(&out.stdout) {
             MarkerOutcome::Complete => {
                 let _ = append_history(
@@ -58,10 +88,16 @@ pub async fn run_phase(
                         "session": out.session_id.to_string(),
                     }),
                 );
-                return Ok(PhaseOutcome::Complete { turns_used: turn, last_session });
+                return Ok(PhaseOutcome::Complete {
+                    turns_used: turn,
+                    last_session,
+                });
             }
             MarkerOutcome::Failed(reason) => {
-                return Ok(PhaseOutcome::Failed { reason, turns_used: turn });
+                return Ok(PhaseOutcome::Failed {
+                    reason,
+                    turns_used: turn,
+                });
             }
             MarkerOutcome::Continue => {}
         }
@@ -81,9 +117,11 @@ pub async fn run_phase(
 }
 
 fn is_cancelled(n: &Arc<Notify>) -> bool {
-    use std::future::Future;
-    use std::pin::Pin;
-    use std::task::{Context, Poll};
+    use std::{
+        future::Future,
+        pin::Pin,
+        task::{Context, Poll},
+    };
 
     let waker = futures::task::noop_waker();
     let mut cx = Context::from_waker(&waker);

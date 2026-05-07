@@ -23,7 +23,10 @@ async fn gate_caps_per_column() {
     assert!(p1.is_some());
     // Per-column cap
     let p2 = g.try_acquire("Coding").await;
-    assert!(p2.is_none(), "per-column cap should reject 2nd for same column");
+    assert!(
+        p2.is_none(),
+        "per-column cap should reject 2nd for same column"
+    );
     // Different column is fine
     let p3 = g.try_acquire("Reviewing").await;
     assert!(p3.is_some());

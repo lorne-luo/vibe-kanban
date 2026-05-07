@@ -1,25 +1,53 @@
 //! Notifier — sends macOS / desktop notifications for kanban events.
-//!
-//! The full osascript implementation lives in Task G1.  For now this is a
-//! lightweight stub that logs at INFO level so the rest of the codebase
-//! can call `ctx.notifier.notify(…)` without any conditional compilation.
 
 pub struct Notifier {
     enabled: bool,
+    spawner: Box<dyn Fn(&str, &str, &str) + Send + Sync>,
 }
 
 impl Notifier {
     pub fn new(enabled: bool) -> Self {
-        Self { enabled }
+        Self {
+            enabled,
+            spawner: Box::new(|title, key, summary| {
+                if !cfg!(target_os = "macos") && std::env::var("KANBAN_FORCE_NOTIFY").is_err() {
+                    return;
+                }
+                let body = format!("{} - {}", key, summary);
+                let _ = std::process::Command::new("osascript")
+                    .args([
+                        "-e",
+                        &format!(
+                            r#"display notification "{}" with title "vibe-kanban" subtitle "{}""#,
+                            escape_osascript(&body),
+                            escape_osascript(title),
+                        ),
+                    ])
+                    .spawn();
+            }),
+        }
     }
 
-    /// Fire a notification.  `event` is a short identifier (e.g. "error"),
-    /// `key` is the Jira issue key (may be empty), and `title` is the card
-    /// title shown in the alert.
-    pub fn notify(&self, event: &str, key: &str, title: &str) {
-        if self.enabled {
-            tracing::info!(event, key, title, "kanban notification");
+    #[cfg(any(test, feature = "test-utils"))]
+    pub fn capture() -> (Self, std::sync::Arc<std::sync::Mutex<Vec<(String, String, String)>>>) {
+        let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let l2 = log.clone();
+        (
+            Self {
+                enabled: true,
+                spawner: Box::new(move |t, k, s| {
+                    l2.lock().unwrap().push((t.into(), k.into(), s.into()));
+                }),
+            },
+            log,
+        )
+    }
+
+    pub fn notify(&self, title: &str, key: &str, summary: &str) {
+        if !self.enabled {
+            return;
         }
+        (self.spawner)(title, key, summary);
     }
 }
 
@@ -27,4 +55,8 @@ impl Default for Notifier {
     fn default() -> Self {
         Self::new(false)
     }
+}
+
+fn escape_osascript(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
 }

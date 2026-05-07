@@ -1,8 +1,8 @@
-use crate::config::Reconciliation;
-use crate::jira::JiraDiff;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
+
+use crate::{config::Reconciliation, jira::JiraDiff};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReconcileAction {
@@ -15,19 +15,13 @@ pub enum ReconcileAction {
 pub fn decide_action(diff: &JiraDiff, cfg: &Reconciliation) -> Vec<ReconcileAction> {
     let mut out = vec![ReconcileAction::UpdateSnapshot];
 
-    if diff.status_terminal
-        && cfg.on_jira_status_terminal.as_deref() == Some("stop_immediately")
-    {
+    if diff.status_terminal && cfg.on_jira_status_terminal.as_deref() == Some("stop_immediately") {
         out.push(ReconcileAction::Stop);
     }
-    if diff.assignee_changed
-        && cfg.on_jira_assignee_change.as_deref() == Some("stop_immediately")
-    {
+    if diff.assignee_changed && cfg.on_jira_assignee_change.as_deref() == Some("stop_immediately") {
         out.push(ReconcileAction::Stop);
     }
-    if !diff.new_comments.is_empty()
-        && cfg.on_jira_comment.as_deref() == Some("inject_next_turn")
-    {
+    if !diff.new_comments.is_empty() && cfg.on_jira_comment.as_deref() == Some("inject_next_turn") {
         let blob = format!(
             "New comments since last turn:\n{}",
             serde_json::to_string_pretty(&diff.new_comments).unwrap_or_default()
@@ -66,12 +60,11 @@ pub async fn upsert_card_from_jira(
     let project_id_str = project_id.to_string();
 
     // Look up existing card by jira_key
-    let existing: Option<(String, Option<String>, Option<String>)> = sqlx::query_as(
-        "SELECT id, kanban_phase, jira_snapshot FROM tasks WHERE jira_key = ?",
-    )
-    .bind(&issue.key)
-    .fetch_optional(pool)
-    .await?;
+    let existing: Option<(String, Option<String>, Option<String>)> =
+        sqlx::query_as("SELECT id, kanban_phase, jira_snapshot FROM tasks WHERE jira_key = ?")
+            .bind(&issue.key)
+            .fetch_optional(pool)
+            .await?;
 
     if let Some((id_str, phase, prev_snap)) = existing {
         let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::nil());

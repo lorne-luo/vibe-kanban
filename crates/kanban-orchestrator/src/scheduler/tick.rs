@@ -4,17 +4,21 @@
 //! every tick.  It is cheaply clonable so that `tokio::spawn`ed per-card
 //! tasks each get their own copy.
 
-use crate::config::Workflow;
-use crate::dispatcher::gate::Gate;
-use crate::dispatcher::phase::{run_phase, PhaseInputs, PhaseOutcome};
-use crate::dispatcher::PhaseExecutor;
-use crate::notifier::Notifier;
+use std::{path::PathBuf, sync::Arc, time::Duration};
+
 use db::models::task::Task;
 use sqlx::SqlitePool;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
 use uuid::Uuid;
+
+use crate::{
+    config::Workflow,
+    dispatcher::{
+        PhaseExecutor,
+        gate::Gate,
+        phase::{PhaseInputs, PhaseOutcome, run_phase},
+    },
+    notifier::Notifier,
+};
 
 // ---------------------------------------------------------------------------
 // Context
@@ -83,29 +87,20 @@ pub async fn do_tick(ctx: &OrchestratorContext) -> crate::Result<()> {
         }
 
         if let Some(diff) = outcome.diff {
-            let actions =
-                crate::reconciler::decide_action(&diff, &ctx.workflow.reconciliation);
+            let actions = crate::reconciler::decide_action(&diff, &ctx.workflow.reconciliation);
             for action in actions {
                 use crate::reconciler::ReconcileAction;
                 match action {
                     ReconcileAction::Stop => {
-                        crate::reconciler::mark_archived(&ctx.pool, outcome.task_id)
-                            .await?;
+                        crate::reconciler::mark_archived(&ctx.pool, outcome.task_id).await?;
                     }
                     ReconcileAction::QueueInject(blob) => {
-                        crate::reconciler::enqueue_inject(
-                            &ctx.pool,
-                            outcome.task_id,
-                            &blob,
-                        )
-                        .await?;
+                        crate::reconciler::enqueue_inject(&ctx.pool, outcome.task_id, &blob)
+                            .await?;
                     }
                     ReconcileAction::Notify(ev) => {
-                        ctx.notifier.notify(
-                            &ev,
-                            issue.key.as_str(),
-                            &issue.fields.summary,
-                        );
+                        ctx.notifier
+                            .notify(&ev, issue.key.as_str(), &issue.fields.summary);
                     }
                     ReconcileAction::UpdateSnapshot => {}
                 }

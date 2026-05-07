@@ -1,5 +1,6 @@
-use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use std::str::FromStr;
+
+use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
 
 pub async fn test_pool() -> SqlitePool {
     let opts = SqliteConnectOptions::from_str("sqlite::memory:")
@@ -7,10 +8,7 @@ pub async fn test_pool() -> SqlitePool {
         .pragma("journal_mode", "WAL");
     let pool = SqlitePool::connect_with(opts).await.unwrap();
     // Run all migrations (path relative to CARGO_MANIFEST_DIR = crates/kanban-orchestrator)
-    sqlx::migrate!("../db/migrations")
-        .run(&pool)
-        .await
-        .unwrap();
+    sqlx::migrate!("../db/migrations").run(&pool).await.unwrap();
     pool
 }
 

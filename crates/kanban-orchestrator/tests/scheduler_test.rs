@@ -1,7 +1,12 @@
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
+
 use kanban_orchestrator::scheduler::{ManualTrigger, Scheduler};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
 
 #[tokio::test]
 async fn manual_trigger_fires_tick() {

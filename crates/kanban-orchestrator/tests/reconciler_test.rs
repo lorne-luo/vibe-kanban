@@ -1,8 +1,10 @@
 mod common;
 
-use kanban_orchestrator::config::Reconciliation;
-use kanban_orchestrator::jira::{JiraComment, JiraDiff};
-use kanban_orchestrator::reconciler::{decide_action, ReconcileAction};
+use kanban_orchestrator::{
+    config::Reconciliation,
+    jira::{JiraComment, JiraDiff},
+    reconciler::{ReconcileAction, decide_action},
+};
 
 #[test]
 fn terminal_status_stops_immediately() {
@@ -32,7 +34,9 @@ fn new_comment_queues_inject() {
     };
     let actions = decide_action(&d, &cfg);
     assert!(
-        actions.iter().any(|a| matches!(a, ReconcileAction::QueueInject(_))),
+        actions
+            .iter()
+            .any(|a| matches!(a, ReconcileAction::QueueInject(_))),
         "expected QueueInject action"
     );
 }
@@ -50,8 +54,7 @@ async fn new_issue_creates_card_in_initial_column() {
     let pool = common::test_pool().await;
     let project_id = common::create_project(&pool, "AP").await;
 
-    let workflow_yaml =
-        std::fs::read_to_string("tests/fixtures/valid_workflow.yml").unwrap();
+    let workflow_yaml = std::fs::read_to_string("tests/fixtures/valid_workflow.yml").unwrap();
     let workflow: kanban_orchestrator::config::Workflow =
         serde_yaml::from_str(&workflow_yaml).unwrap();
 
@@ -66,18 +69,13 @@ async fn new_issue_creates_card_in_initial_column() {
             description: None,
             labels: vec![],
             priority: None,
-            comment: kanban_orchestrator::jira::JiraComments {
-                comments: vec![],
-            },
+            comment: kanban_orchestrator::jira::JiraComments { comments: vec![] },
             attachment: vec![],
         },
     };
 
     let outcome = kanban_orchestrator::reconciler::upsert_card_from_jira(
-        &pool,
-        project_id,
-        &workflow,
-        &issue,
+        &pool, project_id, &workflow, &issue,
     )
     .await
     .unwrap();

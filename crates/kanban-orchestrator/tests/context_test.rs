@@ -29,13 +29,8 @@ fn sample_card() -> Task {
 fn writes_task_json_phase_md() {
     let dir = tempfile::tempdir().unwrap();
     let card = sample_card();
-    kanban_orchestrator::context::write_context(
-        dir.path(),
-        &card,
-        Some("reconcile-blob"),
-        None,
-    )
-    .unwrap();
+    kanban_orchestrator::context::write_context(dir.path(), &card, Some("reconcile-blob"), None)
+        .unwrap();
     let task = std::fs::read_to_string(dir.path().join(".kanban-context/task.json")).unwrap();
     assert!(task.contains("\"jira_key\""), "task.json missing jira_key");
     let rec = std::fs::read_to_string(dir.path().join(".kanban-context/reconcile.md")).unwrap();

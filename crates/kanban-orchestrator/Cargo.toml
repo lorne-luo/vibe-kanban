@@ -26,6 +26,7 @@ tokio-util = { version = "0.7", features = ["io"] }
 
 [features]
 qa-mode = ["executors/qa-mode"]
+test-utils = []
 
 [dev-dependencies]
 wiremock = "0.6"

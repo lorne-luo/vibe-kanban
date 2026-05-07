@@ -1,4 +1,4 @@
-use kanban_orchestrator::dispatcher::markers::{parse_markers, MarkerOutcome};
+use kanban_orchestrator::dispatcher::markers::{MarkerOutcome, parse_markers};
 
 #[test]
 fn detects_complete_marker() {

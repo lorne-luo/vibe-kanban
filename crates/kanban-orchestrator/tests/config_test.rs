@@ -11,7 +11,8 @@ fn loads_workflow_from_repo() {
         std::fs::write(
             dir.path().join(format!(".agents/agent/{}.md", n)),
             "---\nname: x\n---\nbody",
-        ).unwrap();
+        )
+        .unwrap();
     }
     // SAFETY: single-threaded test, no concurrent env reads
     unsafe {
@@ -37,16 +38,28 @@ fn parses_valid_workflow() {
 fn rejects_missing_initial() {
     let s = std::fs::read_to_string("tests/fixtures/missing_initial.yml").unwrap();
     let w: Workflow = serde_yaml::from_str(&s).unwrap();
-    let err = w.validate(&["analyzer", "coder", "reviewer"], &|_| true).unwrap_err();
-    assert!(err.contains("initial"), "expected error about 'initial', got: {}", err);
+    let err = w
+        .validate(&["analyzer", "coder", "reviewer"], &|_| true)
+        .unwrap_err();
+    assert!(
+        err.contains("initial"),
+        "expected error about 'initial', got: {}",
+        err
+    );
 }
 
 #[test]
 fn rejects_dangling_next() {
     let s = std::fs::read_to_string("tests/fixtures/dangling_next.yml").unwrap();
     let w: Workflow = serde_yaml::from_str(&s).unwrap();
-    let err = w.validate(&["analyzer", "coder", "reviewer"], &|_| true).unwrap_err();
-    assert!(err.contains("next"), "expected error about 'next', got: {}", err);
+    let err = w
+        .validate(&["analyzer", "coder", "reviewer"], &|_| true)
+        .unwrap_err();
+    assert!(
+        err.contains("next"),
+        "expected error about 'next', got: {}",
+        err
+    );
 }
 
 #[test]
@@ -55,5 +68,9 @@ fn rejects_missing_agent_file() {
     let w: Workflow = serde_yaml::from_str(&s).unwrap();
     // only "analyzer" known — coder/reviewer missing
     let err = w.validate(&["analyzer"], &|_| true).unwrap_err();
-    assert!(err.contains("agent"), "expected error about 'agent', got: {}", err);
+    assert!(
+        err.contains("agent"),
+        "expected error about 'agent', got: {}",
+        err
+    );
 }

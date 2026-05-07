@@ -1,5 +1,5 @@
 use kanban_orchestrator::jira::JiraClient;
-use wiremock::{matchers::*, Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
 
 #[tokio::test]
 async fn search_returns_issues() {
@@ -55,7 +55,9 @@ fn sample_issue() -> kanban_orchestrator::jira::JiraIssue {
         key: "AP-1".into(),
         fields: kanban_orchestrator::jira::JiraFields {
             summary: "Test issue".into(),
-            status: kanban_orchestrator::jira::JiraNamed { name: "To Do".into() },
+            status: kanban_orchestrator::jira::JiraNamed {
+                name: "To Do".into(),
+            },
             assignee: Some(kanban_orchestrator::jira::JiraUser {
                 account_id: "user1".into(),
                 display_name: "User One".into(),
@@ -81,7 +83,7 @@ fn sample_comment(id: &str) -> kanban_orchestrator::jira::JiraComment {
 
 #[test]
 fn diff_detects_new_comment_and_status() {
-    use kanban_orchestrator::jira::{diff_issue, JiraDiff};
+    use kanban_orchestrator::jira::{JiraDiff, diff_issue};
     let a = sample_issue();
     let mut b = a.clone();
     b.fields.status.name = "Done".into();
@@ -96,7 +98,7 @@ fn diff_detects_new_comment_and_status() {
 
 #[test]
 fn diff_detects_terminal_status() {
-    use kanban_orchestrator::jira::{diff_issue, TERMINAL_STATUSES};
+    use kanban_orchestrator::jira::{TERMINAL_STATUSES, diff_issue};
     let a = sample_issue();
     let mut b = a.clone();
     b.fields.status.name = "Done".into();

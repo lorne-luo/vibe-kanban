@@ -1,10 +1,19 @@
-use kanban_orchestrator::config::{Column, OnComplete};
-use kanban_orchestrator::dispatcher::{PhaseExecutor, TurnOutcome};
-use kanban_orchestrator::dispatcher::phase::{run_phase, PhaseInputs, PhaseOutcome};
-use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
+use std::{
+    path::Path,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
+
+use kanban_orchestrator::{
+    config::{Column, OnComplete},
+    dispatcher::{
+        PhaseExecutor, TurnOutcome,
+        phase::{PhaseInputs, PhaseOutcome, run_phase},
+    },
+};
 use tokio::sync::Notify;
 
 struct CompleteOnTurn {
@@ -133,4 +142,32 @@ async fn phase_auto_advances_at_max_turns() {
         PhaseOutcome::Complete { turns_used, .. } => assert_eq!(turns_used, 2),
         other => panic!("expected Complete (auto), got {:?}", other),
     }
+}
+
+#[tokio::test]
+async fn phase_writes_turn_log() {
+    let exec = CompleteOnTurn {
+        target: 1,
+        counter: Arc::new(AtomicUsize::new(0)),
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let card = make_task(); // uses jira_key: Some("AP-1")
+    let agent_md = dir.path().join("agent.md");
+    std::fs::write(&agent_md, "---\nname: coder\n---\ndo the thing").unwrap();
+    let cancel = Arc::new(Notify::new());
+    let column = make_column(OnComplete::Auto);
+    let inputs = PhaseInputs {
+        card: &card,
+        column: &column,
+        worktree: dir.path(),
+        agent_md: &agent_md,
+        max_turns: 3,
+        turn_timeout: Duration::from_secs(30),
+        reconcile_blob: None,
+        review_feedback: None,
+        cancel,
+    };
+    run_phase(inputs, &exec).await.unwrap();
+    let log = dir.path().join("logs/AP-1/phase-Coding-turn-1.log");
+    assert!(log.exists(), "log file should be created");
 }

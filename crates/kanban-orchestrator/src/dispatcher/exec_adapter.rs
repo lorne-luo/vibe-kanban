@@ -189,9 +189,7 @@ impl PhaseExecutor for SimpleShellExecutor {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        let mut child = cmd
-            .spawn()
-            .map_err(crate::OrchestratorError::Io)?;
+        let mut child = cmd.spawn().map_err(crate::OrchestratorError::Io)?;
 
         let stdout_handle = child.stdout.take();
         let stderr_handle = child.stderr.take();
@@ -239,9 +237,11 @@ impl PhaseExecutor for SimpleShellExecutor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::time::Duration;
+
     use tempfile::TempDir;
+
+    use super::*;
 
     /// Helper: write agent_md and return its path + the temp dir guard.
     fn make_agent_md(content: &str) -> (TempDir, std::path::PathBuf) {
@@ -258,11 +258,7 @@ mod tests {
         let (_dir, agent_md) = make_agent_md("hello world");
         // Use a worktree path that exists (the tempdir itself).
         let outcome = exec
-            .run_turn(
-                _dir.path(),
-                &agent_md,
-                Duration::from_secs(10),
-            )
+            .run_turn(_dir.path(), &agent_md, Duration::from_secs(10))
             .await
             .expect("run_turn should succeed");
 
@@ -279,11 +275,7 @@ mod tests {
         let exec = SimpleShellExecutor::new("sleep");
         let (_dir, agent_md) = make_agent_md("60");
         let outcome = exec
-            .run_turn(
-                _dir.path(),
-                &agent_md,
-                Duration::from_millis(200),
-            )
+            .run_turn(_dir.path(), &agent_md, Duration::from_millis(200))
             .await
             .expect("run_turn should return Ok even on timeout");
 

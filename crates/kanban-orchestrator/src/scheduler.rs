@@ -1,9 +1,7 @@
 pub mod tick;
 
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
+
 use tokio::sync::Notify;
 
 #[derive(Clone)]

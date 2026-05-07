@@ -1,7 +1,8 @@
 //! context module — writes .kanban-context/ into the agent's worktree before each turn.
 
-use db::models::task::Task;
 use std::path::Path;
+
+use db::models::task::Task;
 
 pub fn write_context(
     worktree: &Path,
