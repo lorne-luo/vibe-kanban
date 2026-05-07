@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone)]
 pub struct JiraClient {
-    base: String,
-    email: String,
-    token: String,
+    pub base: String,
+    pub email: String,
+    pub token: String,
     http: reqwest::Client,
 }
 
