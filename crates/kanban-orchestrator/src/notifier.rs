@@ -29,7 +29,10 @@ impl Notifier {
     }
 
     #[cfg(any(test, feature = "test-utils"))]
-    pub fn capture() -> (Self, std::sync::Arc<std::sync::Mutex<Vec<(String, String, String)>>>) {
+    pub fn capture() -> (
+        Self,
+        std::sync::Arc<std::sync::Mutex<Vec<(String, String, String)>>>,
+    ) {
         let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let l2 = log.clone();
         (

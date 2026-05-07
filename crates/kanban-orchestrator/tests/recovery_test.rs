@@ -16,15 +16,18 @@ async fn reset_running_resets_to_idle() {
     .bind(proj_id.to_string())
     .execute(&pool).await.unwrap();
 
-    let affected = kanban_orchestrator::recovery::reset_running(&pool).await.unwrap();
+    let affected = kanban_orchestrator::recovery::reset_running(&pool)
+        .await
+        .unwrap();
     assert_eq!(affected, 1);
 
     // Verify the card is now idle with turn=0
-    let row: (String, i64) = sqlx::query_as(
-        "SELECT phase_state, current_turn FROM tasks WHERE id=?"
-    )
-    .bind(task_id.to_string())
-    .fetch_one(&pool).await.unwrap();
+    let row: (String, i64) =
+        sqlx::query_as("SELECT phase_state, current_turn FROM tasks WHERE id=?")
+            .bind(task_id.to_string())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
     assert_eq!(row.0, "idle");
     assert_eq!(row.1, 0);
@@ -44,13 +47,15 @@ async fn reset_running_leaves_awaiting_review_untouched() {
     .bind(proj_id.to_string())
     .execute(&pool).await.unwrap();
 
-    kanban_orchestrator::recovery::reset_running(&pool).await.unwrap();
+    kanban_orchestrator::recovery::reset_running(&pool)
+        .await
+        .unwrap();
 
-    let row: (String,) = sqlx::query_as(
-        "SELECT phase_state FROM tasks WHERE id=?"
-    )
-    .bind(task_id.to_string())
-    .fetch_one(&pool).await.unwrap();
+    let row: (String,) = sqlx::query_as("SELECT phase_state FROM tasks WHERE id=?")
+        .bind(task_id.to_string())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
 
     assert_eq!(row.0, "awaiting_review");
 }

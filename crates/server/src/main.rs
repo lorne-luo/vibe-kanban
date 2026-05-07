@@ -27,28 +27,21 @@ use utils::{
 // single kanban poll tick and exit instead of starting the HTTP server.
 
 async fn run_kanban_once(project: &str) -> anyhow::Result<()> {
-    use kanban_orchestrator::config::load_workflow;
-    use kanban_orchestrator::dispatcher::exec_adapter::SimpleShellExecutor;
-    use kanban_orchestrator::dispatcher::gate::Gate;
-    use kanban_orchestrator::jira::JiraClient;
-    use kanban_orchestrator::notifier::Notifier;
-    use kanban_orchestrator::scheduler::tick::{OrchestratorContext, do_tick};
+    use kanban_orchestrator::{
+        config::load_workflow,
+        dispatcher::{exec_adapter::SimpleShellExecutor, gate::Gate},
+        jira::JiraClient,
+        notifier::Notifier,
+        scheduler::tick::{OrchestratorContext, do_tick},
+    };
 
     let repo_root = std::env::current_dir()?;
     let workflow = load_workflow(&repo_root, project)?;
 
-    let email_val = std::env::var(&workflow.sync.jira.auth_env.email).map_err(|_| {
-        anyhow::anyhow!(
-            "env var {} not set",
-            workflow.sync.jira.auth_env.email
-        )
-    })?;
-    let token_val = std::env::var(&workflow.sync.jira.auth_env.token).map_err(|_| {
-        anyhow::anyhow!(
-            "env var {} not set",
-            workflow.sync.jira.auth_env.token
-        )
-    })?;
+    let email_val = std::env::var(&workflow.sync.jira.auth_env.email)
+        .map_err(|_| anyhow::anyhow!("env var {} not set", workflow.sync.jira.auth_env.email))?;
+    let token_val = std::env::var(&workflow.sync.jira.auth_env.token)
+        .map_err(|_| anyhow::anyhow!("env var {} not set", workflow.sync.jira.auth_env.token))?;
 
     let jira = JiraClient::new(
         format!("https://{}", workflow.sync.jira.site),
@@ -58,8 +51,7 @@ async fn run_kanban_once(project: &str) -> anyhow::Result<()> {
 
     // Use the vibe-kanban data dir DB (same path as server uses at startup)
     let db_path = asset_dir().join("db.v2.sqlite");
-    let pool =
-        sqlx::SqlitePool::connect(&format!("sqlite://{}", db_path.display())).await?;
+    let pool = sqlx::SqlitePool::connect(&format!("sqlite://{}", db_path.display())).await?;
 
     // Find the project_id by name/slug
     let project_id: Option<(String,)> =
