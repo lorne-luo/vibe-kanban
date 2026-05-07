@@ -108,6 +108,30 @@ pub struct Hooks {
     pub on_error: Option<String>,
 }
 
+pub fn load_workflow(repo_root: &std::path::Path, project: &str) -> crate::Result<Workflow> {
+    let path = repo_root.join(format!(".agents/kanban-workflows/{}.yml", project));
+    let s = std::fs::read_to_string(&path).map_err(|e| {
+        crate::OrchestratorError::Workflow(format!("read {}: {}", path.display(), e))
+    })?;
+    let w: Workflow = serde_yaml::from_str(&s)?;
+    let agents_dir = repo_root.join(".agents/agent");
+    let known: Vec<String> = std::fs::read_dir(&agents_dir)
+        .map_err(|e| {
+            crate::OrchestratorError::Workflow(format!("read agents dir: {}", e))
+        })?
+        .filter_map(|r| r.ok())
+        .filter_map(|e| {
+            e.file_name()
+                .to_str()
+                .and_then(|s| s.strip_suffix(".md").map(|s| s.to_string()))
+        })
+        .collect();
+    let known_refs: Vec<&str> = known.iter().map(|s| s.as_str()).collect();
+    w.validate(&known_refs, &|name| std::env::var(name).is_ok())
+        .map_err(crate::OrchestratorError::Workflow)?;
+    Ok(w)
+}
+
 impl Workflow {
     pub fn validate(
         &self,

@@ -1,6 +1,28 @@
 use kanban_orchestrator::config::Workflow;
 
 #[test]
+fn loads_workflow_from_repo() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join(".agents/kanban-workflows")).unwrap();
+    std::fs::create_dir_all(dir.path().join(".agents/agent")).unwrap();
+    let yml = std::fs::read_to_string("tests/fixtures/valid_workflow.yml").unwrap();
+    std::fs::write(dir.path().join(".agents/kanban-workflows/AP.yml"), yml).unwrap();
+    for n in ["analyzer", "coder", "reviewer"] {
+        std::fs::write(
+            dir.path().join(format!(".agents/agent/{}.md", n)),
+            "---\nname: x\n---\nbody",
+        ).unwrap();
+    }
+    // SAFETY: single-threaded test, no concurrent env reads
+    unsafe {
+        std::env::set_var("JIRA_EMAIL", "x");
+        std::env::set_var("JIRA_API_TOKEN", "y");
+    }
+    let w = kanban_orchestrator::config::load_workflow(dir.path(), "AP").unwrap();
+    assert_eq!(w.project, "AP");
+}
+
+#[test]
 fn parses_valid_workflow() {
     let s = std::fs::read_to_string("tests/fixtures/valid_workflow.yml").unwrap();
     let w: Workflow = serde_yaml::from_str(&s).unwrap();
