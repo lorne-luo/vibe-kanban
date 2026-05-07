@@ -1,3 +1,6 @@
+# Worktrees
+.worktrees/
+
 # Rust
 target/
 **/*.rs.bk
@@ -95,3 +98,6 @@ vibe-kanban-cloud/
 *.ts.net.key
 Caddyfile
 Caddyfile.dev
+
+# Git worktrees
+.worktrees/
