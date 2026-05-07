@@ -1,0 +1,63 @@
+version: 1
+project: AP
+
+sync:
+  source: jira
+  jira:
+    site: syfe.atlassian.net
+    project_key: AP
+    jql: "sprint in openSprints() AND assignee in (currentUser())"
+    poll_interval: 15m
+    auth_env:
+      email: JIRA_EMAIL
+      token: JIRA_API_TOKEN
+
+columns:
+  - name: Todo
+    jira_status: ["To Do", "Open", "Backlog"]
+    initial: true
+    next: Analyzing
+
+  - name: Analyzing
+    agent: analyzer
+    on_complete: review
+    next: Coding
+    jira_transition: "Start Progress"
+
+  - name: Coding
+    agent: coder
+    on_complete: review
+    next: Reviewing
+
+  - name: Reviewing
+    agent: reviewer
+    on_complete: auto
+    next: Done
+    jira_transition: "Done"
+
+  - name: Done
+    terminal: true
+
+defaults:
+  workspace_strategy: per_issue_worktree
+  max_concurrent_dispatches: 3
+  max_per_column: 1
+  max_turns_per_phase: 5
+  retry:
+    max_attempts: 3
+    backoff: exponential
+    base_ms: 1000
+  notifications:
+    macos: true
+    events: [card_created, status_changed, awaiting_review, error]
+
+reconciliation:
+  on_jira_comment: inject_next_turn
+  on_jira_status_terminal: stop_immediately
+  on_jira_assignee_change: stop_immediately
+  on_jira_summary_change: inject_next_turn
+
+hooks:
+  pre_dispatch: "pnpm install --frozen-lockfile"
+  post_complete: ""
+  on_error: ""

@@ -10,6 +10,7 @@ use db::DBService;
 use deployment::{Deployment, DeploymentError, RelayHostsNotConfigured, RemoteClientNotConfigured};
 use executors::profile::ExecutorConfigs;
 use git::GitService;
+use kanban_orchestrator::api::KanbanHandle;
 use preview_proxy::PreviewProxyService;
 use relay_control::{RelayControl, signing::RelaySigningService};
 use relay_hosts::RelayHosts;
@@ -79,6 +80,7 @@ pub struct LocalDeployment {
     ssh_config: Arc<russh::server::Config>,
     pty: PtyService,
     pr_sync_notify: Arc<Notify>,
+    kanban: KanbanHandle,
 }
 
 #[derive(Debug, Clone)]
@@ -293,6 +295,7 @@ impl Deployment for LocalDeployment {
             ssh_config,
             pty,
             pr_sync_notify,
+            kanban: KanbanHandle::disabled(),
         };
 
         Ok(deployment)
@@ -484,5 +487,13 @@ impl LocalDeployment {
 
     pub fn trigger_pr_sync(&self) {
         self.pr_sync_notify.notify_one();
+    }
+
+    pub fn kanban(&self) -> &KanbanHandle {
+        &self.kanban
+    }
+
+    pub fn set_kanban(&mut self, handle: KanbanHandle) {
+        self.kanban = handle;
     }
 }

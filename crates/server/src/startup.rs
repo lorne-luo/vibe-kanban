@@ -152,7 +152,7 @@ pub async fn initialize_deployment(
         tracing::info!("Database copy complete");
     }
 
-    let deployment = DeploymentImpl::new(shutdown).await?;
+    let mut deployment = DeploymentImpl::new(shutdown).await?;
     migrate_legacy_attachment_directories(&deployment).await?;
     deployment.update_sentry_scope().await?;
     deployment
@@ -179,7 +179,171 @@ pub async fn initialize_deployment(
         executors::executors::utils::preload_global_executor_options_cache().await;
     });
 
+    // Start Kanban orchestrator if not explicitly disabled
+    if std::env::var("KANBAN_DISABLED").is_err() {
+        let repo_root = if let Ok(p) = std::env::var("KANBAN_REPO_ROOT") {
+            std::path::PathBuf::from(p)
+        } else {
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+        };
+        if let Some(handle) = try_start_kanban_orchestrator(&deployment.db().pool, &repo_root).await
+        {
+            deployment.set_kanban(handle);
+        }
+    }
+
     Ok(deployment)
+}
+
+/// Attempt to start the kanban orchestrator by scanning `.agents/kanban-workflows/*.yml`.
+///
+/// Returns `None` (and logs a warning) if:
+/// - The workflows directory does not exist
+/// - No `.yml`/`.yaml` files are found
+/// - The workflow fails to load or validate (e.g. missing Jira credentials)
+/// - The project cannot be found in the database
+///
+/// To enable: create `.agents/kanban-workflows/<project>.yml` and set the env vars
+/// named in `auth_env` (e.g. `JIRA_EMAIL`, `JIRA_TOKEN`).
+/// To disable entirely: set `KANBAN_DISABLED=1`.
+/// To override the repo root: set `KANBAN_REPO_ROOT=/path/to/repo`.
+async fn try_start_kanban_orchestrator(
+    pool: &sqlx::SqlitePool,
+    repo_root: &std::path::Path,
+) -> Option<kanban_orchestrator::api::KanbanHandle> {
+    use std::sync::Arc;
+
+    use kanban_orchestrator::{
+        api::KanbanHandle,
+        config::load_workflow,
+        dispatcher::{exec_adapter::SimpleShellExecutor, gate::Gate},
+        notifier::Notifier,
+        recovery::reset_running,
+        scheduler::{
+            ManualTrigger, Scheduler,
+            tick::{OrchestratorContext, do_tick},
+        },
+    };
+
+    // Scan for workflow files
+    let workflows_dir = repo_root.join(".agents/kanban-workflows");
+    if !workflows_dir.exists() {
+        return None;
+    }
+
+    let entries = std::fs::read_dir(&workflows_dir).ok()?;
+    let yml_entry = entries.filter_map(|e| e.ok()).find(|e| {
+        e.path()
+            .extension()
+            .map_or(false, |x| x == "yml" || x == "yaml")
+    })?;
+
+    let yml_path = yml_entry.path();
+    let project = yml_path.file_stem()?.to_str()?.to_string();
+
+    // Load and validate workflow (this also checks env vars for Jira credentials)
+    let workflow = match load_workflow(repo_root, &project) {
+        Ok(w) => w,
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                "kanban workflow load failed — orchestrator disabled. \
+                 Set KANBAN_REPO_ROOT and the auth env vars to enable."
+            );
+            return None;
+        }
+    };
+
+    // Read Jira credentials from env
+    let email_env = &workflow.sync.jira.auth_env.email;
+    let token_env = &workflow.sync.jira.auth_env.token;
+    let email = match std::env::var(email_env) {
+        Ok(v) => v,
+        Err(_) => {
+            tracing::warn!(env = %email_env, "kanban: Jira email env var not set");
+            return None;
+        }
+    };
+    let token = match std::env::var(token_env) {
+        Ok(v) => v,
+        Err(_) => {
+            tracing::warn!(env = %token_env, "kanban: Jira token env var not set");
+            return None;
+        }
+    };
+
+    let jira = kanban_orchestrator::jira::JiraClient::new(
+        format!("https://{}", workflow.sync.jira.site),
+        email,
+        token,
+    );
+
+    // Look up the project by name in the database
+    let project_id_row: Option<(String,)> =
+        sqlx::query_as("SELECT id FROM projects WHERE name = ? LIMIT 1")
+            .bind(&project)
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten();
+
+    let project_id = match project_id_row.and_then(|(id,)| uuid::Uuid::parse_str(&id).ok()) {
+        Some(id) => id,
+        None => {
+            tracing::warn!(
+                project = %project,
+                "kanban: project not found in DB — orchestrator disabled"
+            );
+            return None;
+        }
+    };
+
+    // Recovery: reset any tasks left running from a prior session
+    match reset_running(pool).await {
+        Ok(n) if n > 0 => tracing::info!(count = n, "kanban: reset {} stale running tasks", n),
+        Err(e) => tracing::warn!(error = %e, "kanban: recovery reset failed"),
+        _ => {}
+    }
+
+    let max_concurrent = workflow.defaults.max_concurrent_dispatches.unwrap_or(3) as usize;
+    let max_per_col = workflow.defaults.max_per_column.unwrap_or(1) as usize;
+    let poll_interval = workflow.sync.jira.poll_interval;
+    let macos_notify = workflow
+        .defaults
+        .notifications
+        .as_ref()
+        .map_or(false, |n| n.macos);
+
+    let trigger = ManualTrigger::new();
+
+    let ctx = OrchestratorContext {
+        pool: pool.clone(),
+        workflow: workflow.clone(),
+        repo_root: repo_root.to_path_buf(),
+        jira,
+        gate: Arc::new(Gate::new(max_concurrent, max_per_col)),
+        executor: Arc::new(SimpleShellExecutor::new("claude --print")),
+        notifier: Arc::new(Notifier::new(macos_notify)),
+        project_id,
+    };
+
+    let trigger_clone = trigger.clone();
+    let scheduler = Scheduler::new(poll_interval, trigger_clone, move || {
+        let ctx2 = ctx.clone();
+        async move {
+            if let Err(e) = do_tick(&ctx2).await {
+                tracing::error!(error = %e, "kanban tick failed");
+            }
+        }
+    });
+
+    tokio::spawn(scheduler.run());
+    tracing::info!(project = %project, "kanban orchestrator started");
+
+    Some(KanbanHandle {
+        trigger,
+        workflow: Some(Arc::new(workflow)),
+    })
 }
 
 /// Gracefully shut down running execution processes.

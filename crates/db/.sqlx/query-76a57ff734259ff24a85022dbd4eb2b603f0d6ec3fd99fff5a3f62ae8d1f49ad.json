@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n               id as \"id!: String\",\n               task_id as \"task_id!: String\",\n               event_type as \"event_type!: String\",\n               from_phase,\n               to_phase,\n               actor as \"actor!: String\",\n               payload,\n               ts as \"ts!: String\"\n               FROM task_events WHERE task_id = ? ORDER BY ts DESC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: String",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "task_id!: String",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "event_type!: String",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "from_phase",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "to_phase",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "actor!: String",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "payload",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "ts!: String",
+        "ordinal": 7,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "76a57ff734259ff24a85022dbd4eb2b603f0d6ec3fd99fff5a3f62ae8d1f49ad"
+}
