@@ -17,6 +17,81 @@ use utils::{
     sentry::{self as sentry_utils, SentrySource, sentry_layer},
 };
 
+// ---------------------------------------------------------------------------
+// Kanban one-shot poll mode
+// ---------------------------------------------------------------------------
+//
+// Usage: KANBAN_ONCE=1 KANBAN_PROJECT=AP JIRA_EMAIL=x@y JIRA_API_TOKEN=tok ./server
+//
+// If KANBAN_ONCE=1 and KANBAN_PROJECT=<slug> are set, the server will run a
+// single kanban poll tick and exit instead of starting the HTTP server.
+
+async fn run_kanban_once(project: &str) -> anyhow::Result<()> {
+    use kanban_orchestrator::config::load_workflow;
+    use kanban_orchestrator::dispatcher::exec_adapter::SimpleShellExecutor;
+    use kanban_orchestrator::dispatcher::gate::Gate;
+    use kanban_orchestrator::jira::JiraClient;
+    use kanban_orchestrator::notifier::Notifier;
+    use kanban_orchestrator::scheduler::tick::{OrchestratorContext, do_tick};
+
+    let repo_root = std::env::current_dir()?;
+    let workflow = load_workflow(&repo_root, project)?;
+
+    let email_val = std::env::var(&workflow.sync.jira.auth_env.email).map_err(|_| {
+        anyhow::anyhow!(
+            "env var {} not set",
+            workflow.sync.jira.auth_env.email
+        )
+    })?;
+    let token_val = std::env::var(&workflow.sync.jira.auth_env.token).map_err(|_| {
+        anyhow::anyhow!(
+            "env var {} not set",
+            workflow.sync.jira.auth_env.token
+        )
+    })?;
+
+    let jira = JiraClient::new(
+        format!("https://{}", workflow.sync.jira.site),
+        email_val,
+        token_val,
+    );
+
+    // Use the vibe-kanban data dir DB (same path as server uses at startup)
+    let db_path = asset_dir().join("db.v2.sqlite");
+    let pool =
+        sqlx::SqlitePool::connect(&format!("sqlite://{}", db_path.display())).await?;
+
+    // Find the project_id by name/slug
+    let project_id: Option<(String,)> =
+        sqlx::query_as("SELECT id FROM projects WHERE name = ? LIMIT 1")
+            .bind(project)
+            .fetch_optional(&pool)
+            .await?;
+
+    let project_uuid = match project_id {
+        Some((id_str,)) => uuid::Uuid::parse_str(&id_str)?,
+        None => {
+            eprintln!("Project '{}' not found in database", project);
+            std::process::exit(1);
+        }
+    };
+
+    let ctx = OrchestratorContext {
+        pool,
+        workflow,
+        repo_root,
+        jira,
+        gate: std::sync::Arc::new(Gate::new(3, 1)),
+        executor: std::sync::Arc::new(SimpleShellExecutor::new("echo")),
+        notifier: std::sync::Arc::new(Notifier::new(true)),
+        project_id: project_uuid,
+    };
+
+    do_tick(&ctx).await?;
+    println!("kanban poll tick complete for project '{}'", project);
+    Ok(())
+}
+
 #[derive(Debug, Error)]
 pub enum VibeKanbanError {
     #[error(transparent)]
@@ -48,6 +123,14 @@ async fn main() -> Result<(), VibeKanbanError> {
         .with(tracing_subscriber::fmt::layer().with_filter(env_filter))
         .with(sentry_layer())
         .init();
+
+    // Kanban one-shot poll mode — run a single tick and exit
+    if std::env::var("KANBAN_ONCE").as_deref() == Ok("1") {
+        let project = std::env::var("KANBAN_PROJECT").unwrap_or_else(|_| "AP".into());
+        return run_kanban_once(&project)
+            .await
+            .map_err(VibeKanbanError::Other);
+    }
 
     // Create asset directory if it doesn't exist
     if !asset_dir().exists() {
