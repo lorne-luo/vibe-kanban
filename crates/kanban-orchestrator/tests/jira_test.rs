@@ -1,7 +1,7 @@
 use kanban_orchestrator::jira::{
-    diff_issue, JiraComment, JiraComments, JiraFields, JiraIssue, JiraNamed,
+    JiraComment, JiraComments, JiraFields, JiraIssue, JiraNamed, diff_issue,
 };
-use wiremock::{matchers::*, Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
 
 #[tokio::test]
 async fn search_returns_issues() {
@@ -26,11 +26,8 @@ async fn search_returns_issues() {
         .mount(&server)
         .await;
 
-    let client = kanban_orchestrator::jira::JiraClient::new(
-        server.uri(),
-        "u@x".into(),
-        "tok".into(),
-    );
+    let client =
+        kanban_orchestrator::jira::JiraClient::new(server.uri(), "u@x".into(), "tok".into());
     let issues = client.search("project=AP").await.unwrap();
     assert_eq!(issues.len(), 1);
     assert_eq!(issues[0].key, "AP-1");

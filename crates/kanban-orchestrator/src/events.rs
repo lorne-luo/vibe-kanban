@@ -1,8 +1,7 @@
 use chrono::Utc;
+use db::models::task_event::TaskEvent;
 use sqlx::SqlitePool;
 use uuid::Uuid;
-
-use db::models::task_event::TaskEvent;
 
 pub async fn emit(
     pool: &SqlitePool,
@@ -29,8 +28,9 @@ pub async fn emit(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use sqlx::sqlite::SqlitePoolOptions;
+
+    use super::*;
 
     async fn test_pool() -> SqlitePool {
         let pool = SqlitePoolOptions::new()

@@ -1,7 +1,8 @@
-use kanban_orchestrator::config::Workflow;
-use kanban_orchestrator::jira::{JiraComment, JiraComments, JiraFields, JiraIssue, JiraNamed};
-use sqlx::sqlite::SqlitePoolOptions;
-use sqlx::SqlitePool;
+use kanban_orchestrator::{
+    config::Workflow,
+    jira::{JiraComment, JiraComments, JiraFields, JiraIssue, JiraNamed},
+};
+use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
 use uuid::Uuid;
 
 pub async fn test_pool() -> SqlitePool {
@@ -101,12 +102,10 @@ pub async fn create_project(pool: &SqlitePool, name: &str) -> Uuid {
 }
 
 pub fn load_test_workflow() -> Workflow {
-    let yml = std::fs::read_to_string(
-        concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/fixtures/valid_workflow.yml"
-        ),
-    )
+    let yml = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/valid_workflow.yml"
+    ))
     .expect("valid_workflow.yml");
     serde_yaml::from_str(&yml).expect("parse workflow")
 }

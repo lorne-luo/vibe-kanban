@@ -1,10 +1,7 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::Notify;
+use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
 use db::DBService;
+use tokio::sync::Notify;
 
 pub mod tick;
 

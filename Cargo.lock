@@ -4179,9 +4179,11 @@ name = "kanban-orchestrator"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "db",
  "executors",
+ "futures",
  "git",
  "humantime-serde",
  "reqwest",
@@ -4193,6 +4195,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "tracing",
  "ts-rs 11.0.1",
  "utils",
@@ -7459,6 +7462,7 @@ dependencies = [
  "futures-util",
  "git",
  "git2",
+ "kanban-orchestrator",
  "local-deployment",
  "mime_guess",
  "os_info",

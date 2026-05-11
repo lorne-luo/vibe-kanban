@@ -12,7 +12,9 @@ pub fn parse_markers(stdout: &str) -> MarkerOutcome {
             .find("reason=\"")
             .and_then(|a| {
                 let start = a + "reason=\"".len();
-                tail[start..].find('"').map(|e| tail[start..start + e].to_string())
+                tail[start..]
+                    .find('"')
+                    .map(|e| tail[start..start + e].to_string())
             })
             .unwrap_or_default();
         return MarkerOutcome::Failed(reason);

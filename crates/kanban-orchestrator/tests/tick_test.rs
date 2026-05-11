@@ -4,8 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use kanban_orchestrator::{
-    dispatcher::{PhaseExecutor, TurnOutcome},
-    dispatcher::gate::Gate,
+    dispatcher::{PhaseExecutor, TurnOutcome, gate::Gate},
     jira::JiraClient,
     notifier::Notifier,
     scheduler::tick::{OrchestratorContext, dispatch_round},
@@ -92,8 +91,8 @@ async fn idle_card_with_agent_gets_dispatched() {
     let kanban_phase: Option<String> = row.try_get("kanban_phase").ok().flatten();
 
     // The task must have left the initial idle/Analyzing state
-    let still_idle_in_analyzing = phase_state == "idle"
-        && kanban_phase.as_deref() == Some("Analyzing");
+    let still_idle_in_analyzing =
+        phase_state == "idle" && kanban_phase.as_deref() == Some("Analyzing");
     assert!(
         !still_idle_in_analyzing,
         "task should have been dispatched from Analyzing/idle; \

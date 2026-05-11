@@ -40,13 +40,12 @@ async fn reset_running_resets_only_running_tasks() {
 
     // Check running tasks → idle, current_turn = 0
     for id in [running1, running2] {
-        let (state, turn): (String, i64) = sqlx::query_as(
-            "SELECT phase_state, current_turn FROM tasks WHERE id=?",
-        )
-        .bind(id.as_bytes().to_vec())
-        .fetch_one(&pool)
-        .await
-        .expect("fetch task");
+        let (state, turn): (String, i64) =
+            sqlx::query_as("SELECT phase_state, current_turn FROM tasks WHERE id=?")
+                .bind(id.as_bytes().to_vec())
+                .fetch_one(&pool)
+                .await
+                .expect("fetch task");
         assert_eq!(state, "idle");
         assert_eq!(turn, 0);
     }
@@ -55,15 +54,17 @@ async fn reset_running_resets_only_running_tasks() {
     let check = |id: Uuid, expected_state: &'static str| {
         let pool = pool.clone();
         async move {
-            let (state, turn): (String, i64) = sqlx::query_as(
-                "SELECT phase_state, current_turn FROM tasks WHERE id=?",
-            )
-            .bind(id.as_bytes().to_vec())
-            .fetch_one(&pool)
-            .await
-            .expect("fetch task");
+            let (state, turn): (String, i64) =
+                sqlx::query_as("SELECT phase_state, current_turn FROM tasks WHERE id=?")
+                    .bind(id.as_bytes().to_vec())
+                    .fetch_one(&pool)
+                    .await
+                    .expect("fetch task");
             assert_eq!(state, expected_state);
-            assert_eq!(turn, 3i64, "non-running tasks should keep original turn count");
+            assert_eq!(
+                turn, 3i64,
+                "non-running tasks should keep original turn count"
+            );
         }
     };
 

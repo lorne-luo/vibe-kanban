@@ -31,10 +31,20 @@ impl PhaseExecutor for AlwaysComplete {
     }
 }
 
-fn make_workflow_with_hooks(pre: Option<&str>, post: Option<&str>, on_err: Option<&str>) -> Workflow {
-    let pre_line = pre.map(|s| format!("  pre_dispatch: {s:?}")).unwrap_or_default();
-    let post_line = post.map(|s| format!("  post_complete: {s:?}")).unwrap_or_default();
-    let err_line = on_err.map(|s| format!("  on_error: {s:?}")).unwrap_or_default();
+fn make_workflow_with_hooks(
+    pre: Option<&str>,
+    post: Option<&str>,
+    on_err: Option<&str>,
+) -> Workflow {
+    let pre_line = pre
+        .map(|s| format!("  pre_dispatch: {s:?}"))
+        .unwrap_or_default();
+    let post_line = post
+        .map(|s| format!("  post_complete: {s:?}"))
+        .unwrap_or_default();
+    let err_line = on_err
+        .map(|s| format!("  on_error: {s:?}"))
+        .unwrap_or_default();
     let yml = format!(
         r#"
 version: 1

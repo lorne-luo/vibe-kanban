@@ -18,7 +18,10 @@ fn rejects_missing_initial() {
     let err = w
         .validate(&["analyzer", "coder", "reviewer"], &|_| true)
         .unwrap_err();
-    assert!(err.contains("initial"), "error should mention 'initial', got: {err}");
+    assert!(
+        err.contains("initial"),
+        "error should mention 'initial', got: {err}"
+    );
 }
 
 #[test]
@@ -28,7 +31,10 @@ fn rejects_dangling_next() {
     let err = w
         .validate(&["analyzer", "coder", "reviewer"], &|_| true)
         .unwrap_err();
-    assert!(err.contains("next"), "error should mention 'next', got: {err}");
+    assert!(
+        err.contains("next"),
+        "error should mention 'next', got: {err}"
+    );
 }
 
 #[test]
@@ -37,7 +43,10 @@ fn rejects_missing_agent_file() {
     let w: Workflow = serde_yaml::from_str(&s).unwrap();
     // only "analyzer" known, coder/reviewer missing
     let err = w.validate(&["analyzer"], &|_| true).unwrap_err();
-    assert!(err.contains("agent"), "error should mention 'agent', got: {err}");
+    assert!(
+        err.contains("agent"),
+        "error should mention 'agent', got: {err}"
+    );
 }
 
 #[test]

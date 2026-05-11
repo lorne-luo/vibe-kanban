@@ -1,6 +1,8 @@
-use kanban_orchestrator::config::Reconciliation;
-use kanban_orchestrator::jira::{JiraComment, JiraDiff};
-use kanban_orchestrator::reconciler::{decide_action, ReconcileAction};
+use kanban_orchestrator::{
+    config::Reconciliation,
+    jira::{JiraComment, JiraDiff},
+    reconciler::{ReconcileAction, decide_action},
+};
 
 mod common;
 
@@ -35,9 +37,11 @@ fn new_comment_queues_inject() {
         actions.first(),
         Some(ReconcileAction::UpdateSnapshot)
     ));
-    assert!(actions
-        .iter()
-        .any(|a| matches!(a, ReconcileAction::QueueInject(_))));
+    assert!(
+        actions
+            .iter()
+            .any(|a| matches!(a, ReconcileAction::QueueInject(_)))
+    );
 }
 
 #[tokio::test]
@@ -46,10 +50,11 @@ async fn new_issue_creates_card_in_initial_column() {
     let project_id = common::create_project(&pool, "AP").await;
     let workflow = common::load_test_workflow();
     let issue = common::sample_issue();
-    let outcome =
-        kanban_orchestrator::reconciler::upsert_card_from_jira(&pool, project_id, &workflow, &issue)
-            .await
-            .unwrap();
+    let outcome = kanban_orchestrator::reconciler::upsert_card_from_jira(
+        &pool, project_id, &workflow, &issue,
+    )
+    .await
+    .unwrap();
     assert!(outcome.created);
     assert_eq!(outcome.kanban_phase, Some("Todo".to_string()));
 }
@@ -64,10 +69,7 @@ async fn second_upsert_returns_diff_not_created() {
 
     // First upsert creates the card
     let first = kanban_orchestrator::reconciler::upsert_card_from_jira(
-        &pool,
-        project_id,
-        &workflow,
-        &issue,
+        &pool, project_id, &workflow, &issue,
     )
     .await
     .unwrap();
@@ -76,10 +78,7 @@ async fn second_upsert_returns_diff_not_created() {
     // Modify the issue and upsert again
     issue.fields.summary = "Updated summary".into();
     let second = kanban_orchestrator::reconciler::upsert_card_from_jira(
-        &pool,
-        project_id,
-        &workflow,
-        &issue,
+        &pool, project_id, &workflow, &issue,
     )
     .await
     .unwrap();

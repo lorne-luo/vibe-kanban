@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::time::Duration;
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Workflow {
@@ -138,10 +139,7 @@ impl Workflow {
                     .as_deref()
                     .ok_or_else(|| format!("column '{}' missing next", c.name))?;
                 if !names.contains(next) {
-                    return Err(format!(
-                        "column '{}' next='{}' not found",
-                        c.name, next
-                    ));
+                    return Err(format!("column '{}' next='{}' not found", c.name, next));
                 }
             }
             if let Some(a) = &c.agent {
@@ -185,9 +183,7 @@ pub fn load_workflow(repo_root: &std::path::Path, project: &str) -> crate::Resul
     let w: Workflow = serde_yaml::from_str(&s)?;
     let agents_dir = repo_root.join(".agents/agent");
     let known: Vec<String> = std::fs::read_dir(&agents_dir)
-        .map_err(|e| {
-            crate::OrchestratorError::Workflow(format!("read agents dir: {}", e))
-        })?
+        .map_err(|e| crate::OrchestratorError::Workflow(format!("read agents dir: {}", e)))?
         .filter_map(|r| r.ok())
         .filter_map(|e| {
             e.file_name()

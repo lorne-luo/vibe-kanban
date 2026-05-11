@@ -1,8 +1,8 @@
-use crate::config::Reconciliation;
-use crate::jira::JiraDiff;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
+
+use crate::{config::Reconciliation, jira::JiraDiff};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReconcileAction {
@@ -59,12 +59,10 @@ pub async fn upsert_card_from_jira(
 
     // Look up existing by jira_key
     let project_id_bytes = project_id.as_bytes().to_vec();
-    let row = sqlx::query(
-        "SELECT id, kanban_phase, jira_snapshot FROM tasks WHERE jira_key = ?",
-    )
-    .bind(&issue.key)
-    .fetch_optional(pool)
-    .await?;
+    let row = sqlx::query("SELECT id, kanban_phase, jira_snapshot FROM tasks WHERE jira_key = ?")
+        .bind(&issue.key)
+        .fetch_optional(pool)
+        .await?;
 
     if let Some(row) = row {
         use sqlx::Row;

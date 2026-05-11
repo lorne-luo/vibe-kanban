@@ -1,5 +1,6 @@
-use db::models::task::Task;
 use std::path::Path;
+
+use db::models::task::Task;
 
 pub fn write_context(
     worktree: &Path,
@@ -9,7 +10,10 @@ pub fn write_context(
 ) -> crate::Result<()> {
     let dir = worktree.join(".kanban-context");
     std::fs::create_dir_all(&dir)?;
-    std::fs::write(dir.join("task.json"), serde_json::to_string_pretty(card).unwrap())?;
+    std::fs::write(
+        dir.join("task.json"),
+        serde_json::to_string_pretty(card).unwrap(),
+    )?;
     let phase_md = format!(
         "# Current phase\n\nColumn: {}\nTurn: {}\n",
         card.kanban_phase.as_deref().unwrap_or("(none)"),

@@ -102,7 +102,10 @@ async fn fetch_task_state(pool: &sqlx::SqlitePool, task_id: Uuid) -> (String, St
         .await
         .unwrap();
     let phase_state: String = row.try_get("phase_state").unwrap();
-    let kanban_phase: String = row.try_get::<Option<String>, _>("kanban_phase").unwrap().unwrap_or_default();
+    let kanban_phase: String = row
+        .try_get::<Option<String>, _>("kanban_phase")
+        .unwrap()
+        .unwrap_or_default();
     (phase_state, kanban_phase)
 }
 
@@ -174,7 +177,11 @@ async fn e2e_poll_dispatch_review_done() {
         pool: pool.clone(),
         workflow,
         repo_root: repo_root.path().to_path_buf(),
-        jira: Arc::new(JiraClient::new(server.uri(), "test@e2e".into(), "tok".into())),
+        jira: Arc::new(JiraClient::new(
+            server.uri(),
+            "test@e2e".into(),
+            "tok".into(),
+        )),
         gate: Arc::new(Gate::new(5, 2)),
         executor,
         notifier: Arc::new(Notifier::new()),
@@ -193,8 +200,14 @@ async fn e2e_poll_dispatch_review_done() {
     let task_id = Uuid::from_slice(&task_id_bytes).unwrap();
 
     let (state, phase) = fetch_task_state(&pool, task_id).await;
-    assert_eq!(phase, "Coding", "new card should start in Coding (initial column)");
-    assert_eq!(state, "awaiting_review", "coder exhausts 1 turn with on_complete=review");
+    assert_eq!(
+        phase, "Coding",
+        "new card should start in Coding (initial column)"
+    );
+    assert_eq!(
+        state, "awaiting_review",
+        "coder exhausts 1 turn with on_complete=review"
+    );
 
     // ── Approve ──
     api::approve(&pool, task_id).await.unwrap();
@@ -206,7 +219,10 @@ async fn e2e_poll_dispatch_review_done() {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     let (state, phase) = fetch_task_state(&pool, task_id).await;
-    assert_eq!(phase, "Reviewing", "coder complete should advance to Reviewing");
+    assert_eq!(
+        phase, "Reviewing",
+        "coder complete should advance to Reviewing"
+    );
     assert_eq!(state, "idle");
 
     // ── Tick 3: reviewer emits COMPLETE → advance to Done + jira_transition ──

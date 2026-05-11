@@ -1,5 +1,4 @@
-use std::sync::Arc;
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use chrono::Utc;
 use db::DBService;
@@ -7,11 +6,12 @@ use executors::executors::{CodingAgent, claude::ClaudeCode};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-use crate::config::Workflow;
-use crate::dispatcher::gate::Gate;
-use crate::dispatcher::PhaseExecutor;
-use crate::jira::JiraClient;
-use crate::notifier::Notifier;
+use crate::{
+    config::Workflow,
+    dispatcher::{PhaseExecutor, gate::Gate},
+    jira::JiraClient,
+    notifier::Notifier,
+};
 
 pub struct OrchestratorContext {
     pub pool: SqlitePool,
@@ -71,8 +71,7 @@ pub async fn do_tick(ctx: &OrchestratorContext) -> crate::Result<()> {
             .await?;
         }
         if let Some(diff) = outcome.diff {
-            let actions =
-                crate::reconciler::decide_action(&diff, &ctx.workflow.reconciliation);
+            let actions = crate::reconciler::decide_action(&diff, &ctx.workflow.reconciliation);
             for a in actions {
                 use crate::reconciler::ReconcileAction;
                 match a {
@@ -80,19 +79,12 @@ pub async fn do_tick(ctx: &OrchestratorContext) -> crate::Result<()> {
                         crate::reconciler::mark_archived(&ctx.pool, outcome.task_id).await?;
                     }
                     ReconcileAction::QueueInject(blob) => {
-                        crate::reconciler::enqueue_inject(
-                            &ctx.pool,
-                            outcome.task_id,
-                            &blob,
-                        )
-                        .await?;
+                        crate::reconciler::enqueue_inject(&ctx.pool, outcome.task_id, &blob)
+                            .await?;
                     }
                     ReconcileAction::Notify(ev) => {
                         ctx.notifier
-                            .notify(
-                                &ev,
-                                &format!("{}: {}", issue.key, issue.fields.summary),
-                            )
+                            .notify(&ev, &format!("{}: {}", issue.key, issue.fields.summary))
                             .await;
                     }
                     ReconcileAction::UpdateSnapshot => {}
@@ -170,36 +162,30 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
     let jira_key: Option<String> = row.try_get("jira_key").ok().flatten();
     let title: String = row.try_get("title").unwrap_or_default();
 
-    let column_name = kanban_phase.as_deref().ok_or_else(|| {
-        crate::OrchestratorError::Workflow("task has no kanban_phase".into())
+    let column_name = kanban_phase
+        .as_deref()
+        .ok_or_else(|| crate::OrchestratorError::Workflow("task has no kanban_phase".into()))?;
+    let column = ctx.workflow.column(column_name).ok_or_else(|| {
+        crate::OrchestratorError::Workflow(format!("unknown column: {column_name}"))
     })?;
-    let column = ctx
-        .workflow
-        .column(column_name)
-        .ok_or_else(|| {
-            crate::OrchestratorError::Workflow(format!("unknown column: {column_name}"))
-        })?;
-    let agent_name = column.agent.as_deref().ok_or_else(|| {
-        crate::OrchestratorError::Workflow("column has no agent".into())
-    })?;
+    let agent_name = column
+        .agent
+        .as_deref()
+        .ok_or_else(|| crate::OrchestratorError::Workflow("column has no agent".into()))?;
     let agent_md = ctx
         .repo_root
         .join(format!(".agents/agent/{}.md", agent_name));
 
     // Use a temp directory as the worktree for now
-    let worktree_dir = ctx
-        .repo_root
-        .join(format!(".kanban-worktrees/{}", task_id));
+    let worktree_dir = ctx.repo_root.join(format!(".kanban-worktrees/{}", task_id));
     std::fs::create_dir_all(&worktree_dir)?;
 
     // Mark running
     let id_bytes2 = task_id.as_bytes().to_vec();
-    sqlx::query(
-        "UPDATE tasks SET phase_state='running', pending_inject=NULL WHERE id=?",
-    )
-    .bind(id_bytes2)
-    .execute(&ctx.pool)
-    .await?;
+    sqlx::query("UPDATE tasks SET phase_state='running', pending_inject=NULL WHERE id=?")
+        .bind(id_bytes2)
+        .execute(&ctx.pool)
+        .await?;
     crate::events::emit(
         &ctx.pool,
         task_id,
@@ -248,13 +234,11 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
         if let Err(e) = run_hook(hook_cmd, &ctx.repo_root).await {
             let info = serde_json::json!({"hook_error": e.to_string(), "hook": "pre_dispatch"});
             let id_bytes_err = task_id.as_bytes().to_vec();
-            let _ = sqlx::query(
-                "UPDATE tasks SET phase_state='error', error_info=? WHERE id=?",
-            )
-            .bind(info.to_string())
-            .bind(id_bytes_err)
-            .execute(&ctx.pool)
-            .await;
+            let _ = sqlx::query("UPDATE tasks SET phase_state='error', error_info=? WHERE id=?")
+                .bind(info.to_string())
+                .bind(id_bytes_err)
+                .execute(&ctx.pool)
+                .await;
             return Err(e);
         }
     }
@@ -271,8 +255,7 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
         review_feedback: None,
         cancel,
     };
-    let outcome =
-        crate::dispatcher::phase::run_phase(inputs, ctx.executor.as_ref()).await?;
+    let outcome = crate::dispatcher::phase::run_phase(inputs, ctx.executor.as_ref()).await?;
 
     use crate::dispatcher::phase::PhaseOutcome;
     match outcome {
@@ -280,7 +263,15 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
             turns_used,
             last_session,
         } => {
-            advance_card(ctx, task_id, &kanban_phase, column, turns_used, last_session).await?;
+            advance_card(
+                ctx,
+                task_id,
+                &kanban_phase,
+                column,
+                turns_used,
+                last_session,
+            )
+            .await?;
             if let Some(hook_cmd) = ctx.workflow.hooks.post_complete.as_deref() {
                 if let Err(e) = run_hook(hook_cmd, &ctx.repo_root).await {
                     tracing::warn!(?e, "post_complete hook failed");
@@ -303,11 +294,7 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
             .bind(id_bytes)
             .execute(&ctx.pool)
             .await?;
-            let msg = format!(
-                "{}: {}",
-                jira_key.as_deref().unwrap_or(""),
-                title
-            );
+            let msg = format!("{}: {}", jira_key.as_deref().unwrap_or(""), title);
             ctx.notifier.notify("awaiting_review", &msg).await;
             crate::events::emit(
                 &ctx.pool,
@@ -331,11 +318,7 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
             .bind(id_bytes)
             .execute(&ctx.pool)
             .await?;
-            let msg = format!(
-                "{}: {}",
-                jira_key.as_deref().unwrap_or(""),
-                title
-            );
+            let msg = format!("{}: {}", jira_key.as_deref().unwrap_or(""), title);
             ctx.notifier.notify("error", &msg).await;
             crate::events::emit(
                 &ctx.pool,
@@ -380,11 +363,10 @@ async fn advance_card(
     if let Some(t) = column.jira_transition.as_deref() {
         use sqlx::Row;
         let id_bytes = task_id.as_bytes().to_vec();
-        if let Ok(Some(row)) =
-            sqlx::query("SELECT jira_key FROM tasks WHERE id=?")
-                .bind(id_bytes)
-                .fetch_optional(&ctx.pool)
-                .await
+        if let Ok(Some(row)) = sqlx::query("SELECT jira_key FROM tasks WHERE id=?")
+            .bind(id_bytes)
+            .fetch_optional(&ctx.pool)
+            .await
         {
             if let Ok(Some(key)) = row.try_get::<Option<String>, _>("jira_key") {
                 if let Err(e) = ctx.jira.transition(&key, t).await {
@@ -448,10 +430,12 @@ pub async fn do_tick_for_project(
 
     let claude: ClaudeCode = serde_json::from_value(serde_json::json!({}))
         .unwrap_or_else(|_| serde_json::from_str("{}").expect("ClaudeCode default"));
-    let executor = Arc::new(crate::dispatcher::exec_adapter::RealExecutor::with_worktree(
-        CodingAgent::ClaudeCode(claude),
-        repo_root,
-    ));
+    let executor = Arc::new(
+        crate::dispatcher::exec_adapter::RealExecutor::with_worktree(
+            CodingAgent::ClaudeCode(claude),
+            repo_root,
+        ),
+    );
 
     let ctx = OrchestratorContext {
         pool: db.pool.clone(),
@@ -520,9 +504,7 @@ pub async fn do_all_projects_tick(db: &DBService) -> crate::Result<()> {
                     continue;
                 }
             };
-            if let Err(e) =
-                do_tick_for_project(db, project_id, &repo_root, workflow).await
-            {
+            if let Err(e) = do_tick_for_project(db, project_id, &repo_root, workflow).await {
                 tracing::warn!(?e, project = %project_key, "tick failed");
             }
         }

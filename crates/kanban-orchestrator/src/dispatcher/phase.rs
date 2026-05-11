@@ -1,9 +1,8 @@
 use std::{path::Path, sync::Arc, time::Duration};
 
-use utils;
-
 use db::models::task::Task;
 use tokio::sync::Notify;
+use utils;
 
 use crate::{
     config::{Column, OnComplete},
@@ -123,10 +122,7 @@ fn write_turn_log(
         return;
     }
     let filename = format!("phase-{}-turn-{}.log", column.to_lowercase(), turn);
-    let content = format!(
-        "=== STDOUT ===\n{}\n\n=== STDERR ===\n{}\n",
-        stdout, stderr
-    );
+    let content = format!("=== STDOUT ===\n{}\n\n=== STDERR ===\n{}\n", stdout, stderr);
     if let Err(e) = std::fs::write(log_dir.join(&filename), &content) {
         tracing::warn!("failed to write turn log {}: {}", filename, e);
     }
