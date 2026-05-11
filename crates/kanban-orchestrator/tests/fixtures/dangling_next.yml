@@ -1,0 +1,51 @@
+version: 1
+project: AP
+
+sync:
+  source: jira
+  jira:
+    site: example.atlassian.net
+    project_key: AP
+    jql: "project = AP AND assignee = currentUser()"
+    poll_interval: 15m
+    auth_env:
+      email: JIRA_EMAIL
+      token: JIRA_API_TOKEN
+
+columns:
+  - name: Todo
+    jira_status: ["To Do"]
+    initial: true
+    terminal: false
+    next: Analyzing
+
+  - name: Analyzing
+    jira_status: ["In Progress"]
+    agent: analyzer
+    on_complete: auto
+    next: NotAColumn
+
+  - name: Coding
+    jira_status: ["In Progress"]
+    agent: coder
+    on_complete: review
+    next: Reviewing
+
+  - name: Reviewing
+    jira_status: ["In Review"]
+    agent: reviewer
+    on_complete: auto
+    next: Done
+
+  - name: Done
+    jira_status: ["Done"]
+    terminal: true
+
+defaults:
+  max_concurrent_dispatches: 3
+  max_per_column: 1
+  max_turns_per_phase: 5
+
+reconciliation:
+  on_jira_comment: inject_next_turn
+  on_jira_status_terminal: stop_immediately
