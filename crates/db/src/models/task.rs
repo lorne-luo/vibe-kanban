@@ -22,6 +22,32 @@ pub enum TaskStatus {
     Cancelled,
 }
 
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Type,
+    Serialize,
+    Deserialize,
+    TS,
+    EnumString,
+    Display,
+    Default,
+)]
+#[sqlx(type_name = "phase_state", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum PhaseState {
+    #[default]
+    Idle,
+    Running,
+    AwaitingReview,
+    Error,
+    Archived,
+}
+
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize, TS)]
 pub struct Task {
     pub id: Uuid,
@@ -32,6 +58,16 @@ pub struct Task {
     pub parent_workspace_id: Option<Uuid>, // Foreign key to parent Workspace
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub jira_key: Option<String>,
+    pub jira_snapshot: Option<String>,
+    pub jira_synced_at: Option<DateTime<Utc>>,
+    pub kanban_phase: Option<String>,
+    pub phase_state: PhaseState,
+    pub current_turn: i64,
+    pub last_executor_session_id: Option<Uuid>,
+    pub review_pending_since: Option<DateTime<Utc>>,
+    pub error_info: Option<String>,
+    pub pending_inject: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -179,6 +215,16 @@ ORDER BY t.created_at DESC"#,
                     parent_workspace_id: rec.parent_workspace_id,
                     created_at: rec.created_at,
                     updated_at: rec.updated_at,
+                    jira_key: None,
+                    jira_snapshot: None,
+                    jira_synced_at: None,
+                    kanban_phase: None,
+                    phase_state: PhaseState::default(),
+                    current_turn: 0,
+                    last_executor_session_id: None,
+                    review_pending_since: None,
+                    error_info: None,
+                    pending_inject: None,
                 },
                 has_in_progress_attempt: rec.has_in_progress_attempt != 0,
                 last_attempt_failed: rec.last_attempt_failed != 0,
@@ -192,7 +238,15 @@ ORDER BY t.created_at DESC"#,
     pub async fn find_all(pool: &SqlitePool) -> Result<Vec<Self>, sqlx::Error> {
         sqlx::query_as!(
             Task,
-            r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>"
+            r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>",
+               jira_key, jira_snapshot,
+               jira_synced_at as "jira_synced_at?: DateTime<Utc>",
+               kanban_phase,
+               phase_state as "phase_state!: PhaseState",
+               current_turn as "current_turn!: i64",
+               last_executor_session_id as "last_executor_session_id?: Uuid",
+               review_pending_since as "review_pending_since?: DateTime<Utc>",
+               error_info, pending_inject
                FROM tasks
                ORDER BY created_at ASC"#
         )
@@ -203,7 +257,15 @@ ORDER BY t.created_at DESC"#,
     pub async fn find_by_id(pool: &SqlitePool, id: Uuid) -> Result<Option<Self>, sqlx::Error> {
         sqlx::query_as!(
             Task,
-            r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>"
+            r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>",
+               jira_key, jira_snapshot,
+               jira_synced_at as "jira_synced_at?: DateTime<Utc>",
+               kanban_phase,
+               phase_state as "phase_state!: PhaseState",
+               current_turn as "current_turn!: i64",
+               last_executor_session_id as "last_executor_session_id?: Uuid",
+               review_pending_since as "review_pending_since?: DateTime<Utc>",
+               error_info, pending_inject
                FROM tasks
                WHERE id = $1"#,
             id
@@ -215,7 +277,15 @@ ORDER BY t.created_at DESC"#,
     pub async fn find_by_rowid(pool: &SqlitePool, rowid: i64) -> Result<Option<Self>, sqlx::Error> {
         sqlx::query_as!(
             Task,
-            r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>"
+            r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>",
+               jira_key, jira_snapshot,
+               jira_synced_at as "jira_synced_at?: DateTime<Utc>",
+               kanban_phase,
+               phase_state as "phase_state!: PhaseState",
+               current_turn as "current_turn!: i64",
+               last_executor_session_id as "last_executor_session_id?: Uuid",
+               review_pending_since as "review_pending_since?: DateTime<Utc>",
+               error_info, pending_inject
                FROM tasks
                WHERE rowid = $1"#,
             rowid
@@ -234,7 +304,15 @@ ORDER BY t.created_at DESC"#,
             Task,
             r#"INSERT INTO tasks (id, project_id, title, description, status, parent_workspace_id)
                VALUES ($1, $2, $3, $4, $5, $6)
-               RETURNING id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>""#,
+               RETURNING id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>",
+               jira_key, jira_snapshot,
+               jira_synced_at as "jira_synced_at?: DateTime<Utc>",
+               kanban_phase,
+               phase_state as "phase_state!: PhaseState",
+               current_turn as "current_turn!: i64",
+               last_executor_session_id as "last_executor_session_id?: Uuid",
+               review_pending_since as "review_pending_since?: DateTime<Utc>",
+               error_info, pending_inject"#,
             task_id,
             data.project_id,
             data.title,
@@ -260,7 +338,15 @@ ORDER BY t.created_at DESC"#,
             r#"UPDATE tasks
                SET title = $3, description = $4, status = $5, parent_workspace_id = $6
                WHERE id = $1 AND project_id = $2
-               RETURNING id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>""#,
+               RETURNING id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>",
+               jira_key, jira_snapshot,
+               jira_synced_at as "jira_synced_at?: DateTime<Utc>",
+               kanban_phase,
+               phase_state as "phase_state!: PhaseState",
+               current_turn as "current_turn!: i64",
+               last_executor_session_id as "last_executor_session_id?: Uuid",
+               review_pending_since as "review_pending_since?: DateTime<Utc>",
+               error_info, pending_inject"#,
             id,
             project_id,
             title,
@@ -338,7 +424,15 @@ ORDER BY t.created_at DESC"#,
         // Find only child tasks that have this workspace as their parent
         sqlx::query_as!(
             Task,
-            r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>"
+            r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>",
+               jira_key, jira_snapshot,
+               jira_synced_at as "jira_synced_at?: DateTime<Utc>",
+               kanban_phase,
+               phase_state as "phase_state!: PhaseState",
+               current_turn as "current_turn!: i64",
+               last_executor_session_id as "last_executor_session_id?: Uuid",
+               review_pending_since as "review_pending_since?: DateTime<Utc>",
+               error_info, pending_inject
                FROM tasks
                WHERE parent_workspace_id = $1
                ORDER BY created_at DESC"#,

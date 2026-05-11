@@ -1,0 +1,122 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id as \"id!: Uuid\", project_id as \"project_id!: Uuid\", title, description, status as \"status!: TaskStatus\", parent_workspace_id as \"parent_workspace_id: Uuid\", created_at as \"created_at!: DateTime<Utc>\", updated_at as \"updated_at!: DateTime<Utc>\",\n               jira_key, jira_snapshot,\n               jira_synced_at as \"jira_synced_at?: DateTime<Utc>\",\n               kanban_phase,\n               phase_state as \"phase_state!: PhaseState\",\n               current_turn as \"current_turn!: i64\",\n               last_executor_session_id as \"last_executor_session_id?: Uuid\",\n               review_pending_since as \"review_pending_since?: DateTime<Utc>\",\n               error_info, pending_inject\n               FROM tasks\n               WHERE rowid = $1",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: Uuid",
+        "ordinal": 0,
+        "type_info": "Blob"
+      },
+      {
+        "name": "project_id!: Uuid",
+        "ordinal": 1,
+        "type_info": "Blob"
+      },
+      {
+        "name": "title",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "status!: TaskStatus",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "parent_workspace_id: Uuid",
+        "ordinal": 5,
+        "type_info": "Blob"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at!: DateTime<Utc>",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "jira_key",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "jira_snapshot",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "jira_synced_at?: DateTime<Utc>",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "kanban_phase",
+        "ordinal": 11,
+        "type_info": "Text"
+      },
+      {
+        "name": "phase_state!: PhaseState",
+        "ordinal": 12,
+        "type_info": "Text"
+      },
+      {
+        "name": "current_turn!: i64",
+        "ordinal": 13,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_executor_session_id?: Uuid",
+        "ordinal": 14,
+        "type_info": "Blob"
+      },
+      {
+        "name": "review_pending_since?: DateTime<Utc>",
+        "ordinal": 15,
+        "type_info": "Text"
+      },
+      {
+        "name": "error_info",
+        "ordinal": 16,
+        "type_info": "Text"
+      },
+      {
+        "name": "pending_inject",
+        "ordinal": 17,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "bd802869fff28855c4d0b3ac69ee5a36e0c816348b6d6842777062351e8f134e"
+}
