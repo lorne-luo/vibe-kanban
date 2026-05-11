@@ -4,6 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Notify;
 
+use db::DBService;
+
 pub mod tick;
 
 #[derive(Clone)]
@@ -56,5 +58,21 @@ impl Scheduler {
                 _ = self.trigger.0.notified() => { (self.tick)().await; }
             }
         }
+    }
+
+    /// Build a scheduler that discovers and ticks all projects in the DB.
+    ///
+    /// Uses the workflow's `poll_interval` from the first found workflow, or 5 minutes
+    /// as a default if no workflows are yet discovered.
+    pub fn new_from_db(db: DBService, trigger: ManualTrigger) -> Self {
+        let interval = Duration::from_secs(5 * 60);
+        Self::new(interval, trigger, move || {
+            let db = db.clone();
+            async move {
+                if let Err(e) = tick::do_all_projects_tick(&db).await {
+                    tracing::warn!(?e, "kanban tick error");
+                }
+            }
+        })
     }
 }

@@ -2,6 +2,8 @@ use std::sync::Arc;
 use std::path::PathBuf;
 
 use chrono::Utc;
+use db::DBService;
+use executors::executors::{CodingAgent, claude::ClaudeCode};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
@@ -397,5 +399,113 @@ async fn advance_card(
         None,
     )
     .await?;
+    Ok(())
+}
+
+/// Run a single tick for one project given its workflow and repo root.
+pub async fn do_tick_for_project(
+    db: &DBService,
+    project_id: Uuid,
+    repo_root: &PathBuf,
+    workflow: Workflow,
+) -> crate::Result<()> {
+    let email = std::env::var(&workflow.sync.jira.auth_env.email).unwrap_or_default();
+    let token = std::env::var(&workflow.sync.jira.auth_env.token).unwrap_or_default();
+    let jira = Arc::new(JiraClient::new(
+        workflow.sync.jira.site.clone(),
+        email,
+        token,
+    ));
+
+    let max_global = workflow.columns.len() * 2;
+    let gate = Arc::new(Gate::new(max_global.max(4), 2));
+
+    let claude: ClaudeCode = serde_json::from_value(serde_json::json!({}))
+        .unwrap_or_else(|_| serde_json::from_str("{}").expect("ClaudeCode default"));
+    let executor = Arc::new(crate::dispatcher::exec_adapter::RealExecutor::with_worktree(
+        CodingAgent::ClaudeCode(claude),
+        repo_root,
+    ));
+
+    let ctx = OrchestratorContext {
+        pool: db.pool.clone(),
+        workflow,
+        repo_root: repo_root.clone(),
+        jira,
+        gate,
+        executor,
+        notifier: Arc::new(Notifier::new()),
+        project_id,
+    };
+    do_tick(&ctx).await
+}
+
+/// Discover all projects with workflow configs and run a tick for each.
+pub async fn do_all_projects_tick(db: &DBService) -> crate::Result<()> {
+    use sqlx::Row;
+
+    let rows = sqlx::query(
+        "SELECT id, default_agent_working_dir FROM projects \
+         WHERE default_agent_working_dir IS NOT NULL",
+    )
+    .fetch_all(&db.pool)
+    .await?;
+
+    for row in rows {
+        let id_bytes: Vec<u8> = match row.try_get("id") {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
+        let project_id = match Uuid::from_slice(&id_bytes) {
+            Ok(id) => id,
+            Err(_) => continue,
+        };
+        let working_dir: String = match row.try_get("default_agent_working_dir") {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+        let repo_root = PathBuf::from(&working_dir);
+        let workflows_dir = repo_root.join(".agents/kanban-workflows");
+        if !workflows_dir.exists() {
+            continue;
+        }
+
+        let entries = match std::fs::read_dir(&workflows_dir) {
+            Ok(e) => e,
+            Err(e) => {
+                tracing::warn!(?e, dir = %workflows_dir.display(), "failed to read kanban-workflows dir");
+                continue;
+            }
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("yml") {
+                continue;
+            }
+            let project_key = match path.file_stem().and_then(|s| s.to_str()) {
+                Some(k) => k.to_string(),
+                None => continue,
+            };
+            let workflow = match crate::config::load_workflow(&repo_root, &project_key) {
+                Ok(w) => w,
+                Err(e) => {
+                    tracing::warn!(?e, project = %project_key, "failed to load workflow");
+                    continue;
+                }
+            };
+            if let Err(e) =
+                do_tick_for_project(db, project_id, &repo_root, workflow).await
+            {
+                tracing::warn!(?e, project = %project_key, "tick failed");
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Re-sync a single task from Jira immediately (stub — full impl in later release).
+pub async fn sync_task_now(_db: &DBService, task_id: Uuid) -> crate::Result<()> {
+    tracing::info!(%task_id, "sync_task_now: deferred to next poll cycle");
     Ok(())
 }

@@ -67,6 +67,14 @@ async fn main() -> Result<(), VibeKanbanError> {
         .backfill_repo_names()
         .await
         .map_err(DeploymentError::from)?;
+    if std::env::var("VK_DISABLE_KANBAN_ORCHESTRATOR").is_ok() {
+        tracing::info!("Kanban orchestrator disabled by VK_DISABLE_KANBAN_ORCHESTRATOR");
+    } else if let Err(err) =
+        kanban_orchestrator::runtime::start(deployment.db().clone()).await
+    {
+        tracing::warn!(?err, "Kanban orchestrator did not start");
+    }
+
     deployment
         .track_if_analytics_allowed("session_start", serde_json::json!({}))
         .await;
