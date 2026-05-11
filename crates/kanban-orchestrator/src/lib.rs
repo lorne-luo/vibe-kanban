@@ -1,12 +1,12 @@
 pub mod config;
-pub mod jira;
-pub mod reconciler;
-pub mod dispatcher;
-pub mod scheduler;
-pub mod notifier;
 pub mod context;
-pub mod recovery;
+pub mod dispatcher;
 pub mod events;
+pub mod jira;
+pub mod notifier;
+pub mod reconciler;
+pub mod recovery;
+pub mod scheduler;
 
 #[derive(Debug, thiserror::Error)]
 pub enum OrchestratorError {
