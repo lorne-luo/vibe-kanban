@@ -1,5 +1,7 @@
 use std::{path::Path, sync::Arc, time::Duration};
 
+use utils;
+
 use db::models::task::Task;
 use tokio::sync::Notify;
 
@@ -61,6 +63,14 @@ pub async fn run_phase(
             .run_turn(inputs.worktree, inputs.agent_md, inputs.turn_timeout)
             .await?;
         last_session = out.session_id;
+        write_turn_log(
+            inputs.worktree,
+            inputs.card.jira_key.as_deref(),
+            &inputs.column.name,
+            turn,
+            &out.stdout,
+            &out.stderr,
+        );
         match parse_markers(&out.stdout) {
             MarkerOutcome::Complete => {
                 append_history(
@@ -95,6 +105,30 @@ pub async fn run_phase(
             turns_used: inputs.max_turns,
             last_session,
         })
+    }
+}
+
+fn write_turn_log(
+    _worktree: &Path,
+    jira_key: Option<&str>,
+    column: &str,
+    turn: u32,
+    stdout: &str,
+    stderr: &str,
+) {
+    let key = jira_key.unwrap_or("unknown");
+    let log_dir = utils::assets::asset_dir().join("logs").join(key);
+    if let Err(e) = std::fs::create_dir_all(&log_dir) {
+        tracing::warn!("failed to create log dir {}: {}", log_dir.display(), e);
+        return;
+    }
+    let filename = format!("phase-{}-turn-{}.log", column.to_lowercase(), turn);
+    let content = format!(
+        "=== STDOUT ===\n{}\n\n=== STDERR ===\n{}\n",
+        stdout, stderr
+    );
+    if let Err(e) = std::fs::write(log_dir.join(&filename), &content) {
+        tracing::warn!("failed to write turn log {}: {}", filename, e);
     }
 }
 
