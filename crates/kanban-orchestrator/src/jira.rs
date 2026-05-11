@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone)]
 pub struct JiraClient {
     base: String,
     email: String,
