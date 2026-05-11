@@ -540,6 +540,16 @@ impl From<RepoServiceError> for ApiError {
     }
 }
 
+impl From<kanban_orchestrator::OrchestratorError> for ApiError {
+    fn from(err: kanban_orchestrator::OrchestratorError) -> Self {
+        match err {
+            kanban_orchestrator::OrchestratorError::Db(e) => ApiError::Database(e),
+            kanban_orchestrator::OrchestratorError::Io(e) => ApiError::Io(e),
+            other => ApiError::BadRequest(other.to_string()),
+        }
+    }
+}
+
 impl From<ProjectRepoError> for ApiError {
     fn from(err: ProjectRepoError) -> Self {
         match err {

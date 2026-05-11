@@ -1,3 +1,4 @@
+pub mod api;
 pub mod config;
 pub mod context;
 pub mod dispatcher;
@@ -6,6 +7,7 @@ pub mod jira;
 pub mod notifier;
 pub mod reconciler;
 pub mod recovery;
+pub mod runtime;
 pub mod scheduler;
 
 #[derive(Debug, thiserror::Error)]
