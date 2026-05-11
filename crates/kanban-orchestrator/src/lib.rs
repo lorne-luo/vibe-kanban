@@ -22,6 +22,10 @@ pub enum OrchestratorError {
     Yaml(#[from] serde_yaml::Error),
     #[error("other: {0}")]
     Other(#[from] anyhow::Error),
+    #[error("executor: {0}")]
+    Executor(String),
+    #[error("executor timeout after {0:?}")]
+    ExecutorTimeout(std::time::Duration),
 }
 
 pub type Result<T> = std::result::Result<T, OrchestratorError>;
