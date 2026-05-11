@@ -1,0 +1,28 @@
+[package]
+name = "kanban-orchestrator"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = "0.9"
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "tls-rustls-aws-lc-rs", "sqlite", "uuid", "chrono"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+reqwest = { workspace = true }
+ts-rs = { workspace = true }
+db = { path = "../db" }
+executors = { path = "../executors" }
+services = { path = "../services" }
+git = { path = "../git" }
+utils = { path = "../utils" }
+
+[dev-dependencies]
+wiremock = "0.6"
+tokio = { workspace = true, features = ["test-util", "macros"] }
+tempfile = "3"

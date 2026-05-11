@@ -11,6 +11,7 @@ members = [
     "crates/local-deployment",
     "crates/deployment",
     "crates/review",
+    "crates/kanban-orchestrator",
 ]
 exclude = ["crates/remote"]
 
