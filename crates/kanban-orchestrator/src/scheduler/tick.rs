@@ -243,6 +243,22 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
         .or(ctx.workflow.defaults.max_turns_per_phase)
         .unwrap_or(5);
 
+    // pre_dispatch hook — failure puts card in error and aborts the phase
+    if let Some(hook_cmd) = ctx.workflow.hooks.pre_dispatch.as_deref() {
+        if let Err(e) = run_hook(hook_cmd, &ctx.repo_root).await {
+            let info = serde_json::json!({"hook_error": e.to_string(), "hook": "pre_dispatch"});
+            let id_bytes_err = task_id.as_bytes().to_vec();
+            let _ = sqlx::query(
+                "UPDATE tasks SET phase_state='error', error_info=? WHERE id=?",
+            )
+            .bind(info.to_string())
+            .bind(id_bytes_err)
+            .execute(&ctx.pool)
+            .await;
+            return Err(e);
+        }
+    }
+
     let cancel = Arc::new(tokio::sync::Notify::new());
     let inputs = crate::dispatcher::phase::PhaseInputs {
         card: &card,
@@ -265,6 +281,11 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
             last_session,
         } => {
             advance_card(ctx, task_id, &kanban_phase, column, turns_used, last_session).await?;
+            if let Some(hook_cmd) = ctx.workflow.hooks.post_complete.as_deref() {
+                if let Err(e) = run_hook(hook_cmd, &ctx.repo_root).await {
+                    tracing::warn!(?e, "post_complete hook failed");
+                }
+            }
         }
         PhaseOutcome::AwaitingReview {
             turns_used,
@@ -326,6 +347,11 @@ async fn run_one_phase(ctx: &OrchestratorContext, task_id: Uuid) -> crate::Resul
                 Some(&info),
             )
             .await?;
+            if let Some(hook_cmd) = ctx.workflow.hooks.on_error.as_deref() {
+                if let Err(e) = run_hook(hook_cmd, &ctx.repo_root).await {
+                    tracing::warn!(?e, "on_error hook failed");
+                }
+            }
         }
         PhaseOutcome::Cancelled => {
             let id_bytes = task_id.as_bytes().to_vec();
@@ -507,5 +533,26 @@ pub async fn do_all_projects_tick(db: &DBService) -> crate::Result<()> {
 /// Re-sync a single task from Jira immediately (stub — full impl in later release).
 pub async fn sync_task_now(_db: &DBService, task_id: Uuid) -> crate::Result<()> {
     tracing::info!(%task_id, "sync_task_now: deferred to next poll cycle");
+    Ok(())
+}
+
+/// Run an optional shell hook command in the given working directory.
+/// Returns Ok(()) if cmd is empty or the command exits 0; Err otherwise.
+pub(crate) async fn run_hook(cmd: &str, cwd: &std::path::Path) -> crate::Result<()> {
+    if cmd.is_empty() {
+        return Ok(());
+    }
+    let status = tokio::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .current_dir(cwd)
+        .status()
+        .await?;
+    if !status.success() {
+        return Err(crate::OrchestratorError::Other(anyhow::anyhow!(
+            "hook failed: {}",
+            cmd
+        )));
+    }
     Ok(())
 }
