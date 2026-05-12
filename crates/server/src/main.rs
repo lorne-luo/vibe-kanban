@@ -27,6 +27,9 @@ pub enum VibeKanbanError {
 
 #[tokio::main]
 async fn main() -> Result<(), VibeKanbanError> {
+    // Load .env from CWD upward (silent if missing) — must happen before any env reads
+    let _ = dotenv::dotenv();
+
     // Install rustls crypto provider before any TLS operations
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
