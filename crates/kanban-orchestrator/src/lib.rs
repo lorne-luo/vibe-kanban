@@ -9,6 +9,7 @@ pub mod reconciler;
 pub mod recovery;
 pub mod runtime;
 pub mod scheduler;
+pub mod workflow_status;
 
 #[derive(Debug, thiserror::Error)]
 pub enum OrchestratorError {
