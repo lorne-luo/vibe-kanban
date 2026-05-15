@@ -55,7 +55,6 @@ import { ProjectKanban } from '@/pages/ui-new/ProjectKanban';
 import { MigratePage } from '@/pages/ui-new/MigratePage';
 import { LandingPage } from '@/pages/ui-new/LandingPage';
 import { OnboardingSignInPage } from '@/pages/ui-new/OnboardingSignInPage';
-import { RootRedirectPage } from '@/pages/ui-new/RootRedirectPage';
 
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes);
 
@@ -127,11 +126,7 @@ function AppContent() {
           <SentryRoutes>
             <Route
               path="/"
-              element={
-                <NewDesignScope>
-                  <RootRedirectPage />
-                </NewDesignScope>
-              }
+              element={<Navigate to="/local-projects" replace />}
             />
             <Route
               path="/onboarding"
