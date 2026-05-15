@@ -40,9 +40,9 @@ export type UpdateTag = { tag_name: string | null, content: string | null, };
 
 export type TaskStatus = "todo" | "inprogress" | "inreview" | "done" | "cancelled";
 
-export type Task = { id: string, project_id: string, title: string, description: string | null, status: TaskStatus, parent_workspace_id: string | null, created_at: string, updated_at: string, };
+export type Task = { id: string, project_id: string, title: string, description: string | null, status: TaskStatus, parent_workspace_id: string | null, created_at: string, updated_at: string, jira_key: string | null, jira_snapshot: string | null, jira_synced_at: string | null, kanban_phase: string | null, phase_state: PhaseState, current_turn: bigint, last_executor_session_id: string | null, review_pending_since: string | null, error_info: string | null, pending_inject: string | null, };
 
-export type TaskWithAttemptStatus = { has_in_progress_attempt: boolean, last_attempt_failed: boolean, executor: string, id: string, project_id: string, title: string, description: string | null, status: TaskStatus, parent_workspace_id: string | null, created_at: string, updated_at: string, };
+export type TaskWithAttemptStatus = { has_in_progress_attempt: boolean, last_attempt_failed: boolean, executor: string, id: string, project_id: string, title: string, description: string | null, status: TaskStatus, parent_workspace_id: string | null, created_at: string, updated_at: string, jira_key: string | null, jira_snapshot: string | null, jira_synced_at: string | null, kanban_phase: string | null, phase_state: PhaseState, current_turn: bigint, last_executor_session_id: string | null, review_pending_since: string | null, error_info: string | null, pending_inject: string | null, };
 
 export type TaskRelationships = { parent_task: Task | null, current_workspace: Workspace, children: Array<Task>, };
 
@@ -758,6 +758,18 @@ permissions: Array<PermissionPolicy>, };
 export type ExecutorDiscoveredOptions = { model_selector: ModelSelectorConfig, slash_commands: Array<SlashCommandDescription>, loading_models: boolean, loading_agents: boolean, loading_slash_commands: boolean, error: string | null, };
 
 export type JsonValue = number | string | boolean | Array<JsonValue> | { [key in string]?: JsonValue } | null;
+
+export type ProjectWorkflowState = "ready" | "not_configured" | "invalid";
+
+export type RepoWorkflowState = "ready" | "not_configured" | "invalid";
+
+export type WorkflowEntryState = "ok" | "invalid_yaml" | "missing_agent_file";
+
+export type WorkflowEntry = { name: string, state: WorkflowEntryState, error: string | null, };
+
+export type RepoWorkflowStatus = { repo_id: string, repo_name: string, workflows_dir: string, state: RepoWorkflowState, workflows: Array<WorkflowEntry>, error: string | null, };
+
+export type ProjectWorkflowStatus = { state: ProjectWorkflowState, repos: Array<RepoWorkflowStatus>, checked_at: Date, };
 
 export const DEFAULT_PR_DESCRIPTION_PROMPT = "Update the PR that was just created with a better title and description.\nThe PR number is #{pr_number} and the URL is {pr_url}.\n\nAnalyze the changes in this branch and write:\n1. A concise, descriptive title that summarizes the changes, postfixed with \"(Vibe Kanban)\"\n2. A detailed description that explains:\n   - What changes were made\n   - Why they were made (based on the task context)\n   - Any important implementation details\n   - At the end, include a note: \"This PR was written using [Vibe Kanban](https://vibekanban.com)\"\n\nUse the appropriate CLI tool to update the PR (gh pr edit for GitHub, az repos pr update for Azure DevOps).";
 

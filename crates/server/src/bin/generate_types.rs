@@ -236,6 +236,12 @@ fn generate_types_content() -> String {
         executors::model_selector::ModelSelectorConfig::decl(),
         executors::executor_discovery::ExecutorDiscoveredOptions::decl(),
         serde_json::Value::decl(),
+        kanban_orchestrator::workflow_status::ProjectWorkflowState::decl(),
+        kanban_orchestrator::workflow_status::RepoWorkflowState::decl(),
+        kanban_orchestrator::workflow_status::WorkflowEntryState::decl(),
+        kanban_orchestrator::workflow_status::WorkflowEntry::decl(),
+        kanban_orchestrator::workflow_status::RepoWorkflowStatus::decl(),
+        kanban_orchestrator::workflow_status::ProjectWorkflowStatus::decl(),
     ];
 
     let body = decls
