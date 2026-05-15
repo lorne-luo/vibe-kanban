@@ -7462,6 +7462,7 @@ dependencies = [
  "futures-util",
  "git",
  "git2",
+ "json-patch",
  "kanban-orchestrator",
  "local-deployment",
  "mime_guess",

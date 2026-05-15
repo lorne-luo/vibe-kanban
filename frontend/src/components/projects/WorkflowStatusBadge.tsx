@@ -10,7 +10,7 @@ import type { ProjectWorkflowStatus } from 'shared/types';
 type Variant = 'dot' | 'pill';
 
 interface Props {
-  status: ProjectWorkflowStatus;
+  status: ProjectWorkflowStatus | null | undefined;
   variant?: Variant;
   onClick?: () => void;
 }
@@ -44,6 +44,7 @@ export function WorkflowStatusBadge({
   variant = 'dot',
   onClick,
 }: Props) {
+  if (!status) return null;
   const color = COLOR[status.state];
   const tip = tooltipText(status);
   const clickable = !!onClick;

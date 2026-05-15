@@ -18,8 +18,9 @@ use db::models::{
     repo::Repo,
 };
 use deployment::Deployment;
-use futures_util::{SinkExt, StreamExt, TryStreamExt};
+use futures_util::{SinkExt, StreamExt};
 use kanban_orchestrator::workflow_status::{self, ProjectWorkflowStatus};
+use utils::log_msg::LogMsg;
 use services::services::{file_search::SearchQuery, project::ProjectServiceError};
 use utils::response::ApiResponse;
 use uuid::Uuid;
@@ -77,11 +78,8 @@ pub async fn stream_projects_ws(
 }
 
 async fn handle_projects_ws(socket: WebSocket, deployment: DeploymentImpl) -> anyhow::Result<()> {
-    let mut stream = deployment
-        .events()
-        .stream_projects_raw()
-        .await?
-        .map_ok(|msg| msg.to_ws_message_unchecked());
+    let pool = deployment.db().pool.clone();
+    let mut stream = deployment.events().stream_projects_raw().await?;
 
     // Split socket into sender and receiver
     let (mut sender, mut receiver) = socket.split();
@@ -89,11 +87,16 @@ async fn handle_projects_ws(socket: WebSocket, deployment: DeploymentImpl) -> an
     // Drain (and ignore) any client->server messages so pings/pongs work
     tokio::spawn(async move { while let Some(Ok(_)) = receiver.next().await {} });
 
-    // Forward server messages
+    // Forward server messages, injecting workflow_status into project payloads
     while let Some(item) = stream.next().await {
         match item {
             Ok(msg) => {
-                if sender.send(msg).await.is_err() {
+                let enriched = enrich_log_msg(&pool, msg).await;
+                if sender
+                    .send(enriched.to_ws_message_unchecked())
+                    .await
+                    .is_err()
+                {
                     break; // client disconnected
                 }
             }
@@ -105,6 +108,73 @@ async fn handle_projects_ws(socket: WebSocket, deployment: DeploymentImpl) -> an
     }
 
     Ok(())
+}
+
+/// Wrap LogMsg passthrough so JsonPatch project payloads gain workflow_status.
+async fn enrich_log_msg(pool: &sqlx::SqlitePool, msg: LogMsg) -> LogMsg {
+    match msg {
+        LogMsg::JsonPatch(patch) => LogMsg::JsonPatch(enrich_projects_patch(pool, patch).await),
+        other => other,
+    }
+}
+
+async fn enrich_projects_patch(
+    pool: &sqlx::SqlitePool,
+    mut patch: json_patch::Patch,
+) -> json_patch::Patch {
+    for op in patch.0.iter_mut() {
+        let path = op.path().to_string();
+        let value = match op {
+            json_patch::PatchOperation::Add(a) => Some(&mut a.value),
+            json_patch::PatchOperation::Replace(r) => Some(&mut r.value),
+            _ => None,
+        };
+        let Some(value) = value else {
+            continue;
+        };
+        if path == "/projects" {
+            if let Some(map) = value.as_object_mut() {
+                for (_id, project_value) in map.iter_mut() {
+                    enrich_project_value(pool, project_value).await;
+                }
+            }
+        } else if path.starts_with("/projects/")
+            && !path["/projects/".len()..].is_empty()
+            && !path["/projects/".len()..].contains('/')
+        {
+            enrich_project_value(pool, value).await;
+        }
+    }
+    patch
+}
+
+async fn enrich_project_value(pool: &sqlx::SqlitePool, value: &mut serde_json::Value) {
+    let Some(obj) = value.as_object_mut() else {
+        return;
+    };
+    if obj.contains_key("workflow_status") {
+        return;
+    }
+    let Some(uuid_str) = obj.get("id").and_then(|v| v.as_str()) else {
+        return;
+    };
+    let Ok(project_id) = Uuid::parse_str(uuid_str) else {
+        return;
+    };
+    match workflow_status::compute_for_project(pool, project_id).await {
+        Ok(status) => {
+            if let Ok(status_json) = serde_json::to_value(status) {
+                obj.insert("workflow_status".to_string(), status_json);
+            }
+        }
+        Err(e) => {
+            tracing::warn!(
+                "workflow_status compute failed for {}: {}",
+                project_id,
+                e
+            );
+        }
+    }
 }
 
 pub async fn get_project(
