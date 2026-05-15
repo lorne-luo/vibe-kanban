@@ -175,7 +175,11 @@ impl Workflow {
     }
 }
 
-pub fn load_workflow(repo_root: &std::path::Path, project: &str) -> crate::Result<Workflow> {
+pub fn load_workflow_with_env_probe(
+    repo_root: &std::path::Path,
+    project: &str,
+    env_present: &dyn Fn(&str) -> bool,
+) -> crate::Result<Workflow> {
     let path = repo_root.join(format!(".agents/kanban-workflows/{}.yml", project));
     let s = std::fs::read_to_string(&path).map_err(|e| {
         crate::OrchestratorError::Workflow(format!("read {}: {}", path.display(), e))
@@ -192,7 +196,11 @@ pub fn load_workflow(repo_root: &std::path::Path, project: &str) -> crate::Resul
         })
         .collect();
     let known_refs: Vec<&str> = known.iter().map(|s| s.as_str()).collect();
-    w.validate(&known_refs, &|name| std::env::var(name).is_ok())
+    w.validate(&known_refs, env_present)
         .map_err(crate::OrchestratorError::Workflow)?;
     Ok(w)
+}
+
+pub fn load_workflow(repo_root: &std::path::Path, project: &str) -> crate::Result<Workflow> {
+    load_workflow_with_env_probe(repo_root, project, &|n| std::env::var(n).is_ok())
 }
