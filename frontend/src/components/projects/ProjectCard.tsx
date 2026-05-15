@@ -19,18 +19,19 @@ import {
   MoreHorizontal,
   Trash2,
 } from 'lucide-react';
-import { Project } from 'shared/types';
+import { ProjectWithStatus } from 'shared/types';
 import { useEffect, useRef } from 'react';
 import { useOpenProjectInEditor } from '@/hooks/useOpenProjectInEditor';
 import { useNavigateWithSearch, useProjectRepos } from '@/hooks';
 import { projectsApi } from '@/lib/api';
 import { useTranslation } from 'react-i18next';
+import { WorkflowStatusBadge } from '@/components/projects/WorkflowStatusBadge';
 
 type Props = {
-  project: Project;
+  project: ProjectWithStatus;
   isFocused: boolean;
   setError: (error: string) => void;
-  onEdit: (project: Project) => void;
+  onEdit: (project: ProjectWithStatus) => void;
 };
 
 function ProjectCard({ project, isFocused, setError, onEdit }: Props) {
@@ -65,7 +66,7 @@ function ProjectCard({ project, isFocused, setError, onEdit }: Props) {
     }
   };
 
-  const handleEdit = (project: Project) => {
+  const handleEdit = (project: ProjectWithStatus) => {
     onEdit(project);
   };
 
@@ -82,7 +83,12 @@ function ProjectCard({ project, isFocused, setError, onEdit }: Props) {
     >
       <CardHeader>
         <div className="flex items-start justify-between">
-          <CardTitle className="text-lg">{project.name}</CardTitle>
+          <CardTitle className="text-lg">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="truncate">{project.name}</span>
+              <WorkflowStatusBadge status={project.workflow_status} />
+            </div>
+          </CardTitle>
           <div className="flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
