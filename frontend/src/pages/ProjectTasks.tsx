@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -66,6 +66,8 @@ import {
 } from '@/components/ui/breadcrumb';
 import { AttemptHeaderActions } from '@/components/panels/AttemptHeaderActions';
 import { TaskPanelHeaderActions } from '@/components/panels/TaskPanelHeaderActions';
+import { WorkflowStatusBadge } from '@/components/projects/WorkflowStatusBadge';
+import { WorkflowStatusDialog } from '@/components/projects/WorkflowStatusDialog';
 
 import type { TaskWithAttemptStatus, TaskStatus } from 'shared/types';
 
@@ -142,9 +144,11 @@ export function ProjectTasks() {
 
   const {
     projectId,
+    workflow_status,
     isLoading: projectLoading,
     error: projectError,
   } = useProject();
+  const [workflowStatusOpen, setWorkflowStatusOpen] = useState(false);
   const hasShownMigrationDialogRef = useRef(false);
 
   useEffect(() => {
@@ -895,6 +899,48 @@ export function ProjectTasks() {
           </AlertTitle>
           <AlertDescription>{streamError}</AlertDescription>
         </Alert>
+      )}
+
+      {workflow_status && (
+        <>
+          <div className="flex items-center justify-end px-4 pt-2">
+            <WorkflowStatusBadge
+              status={workflow_status}
+              variant="pill"
+              onClick={() => setWorkflowStatusOpen(true)}
+            />
+          </div>
+          {workflow_status.state === 'invalid' && (
+            <Alert className="mx-4 my-2">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Workflow agent not ready</AlertTitle>
+              <AlertDescription>
+                {(() => {
+                  const first = workflow_status.repos.flatMap((r) =>
+                    r.workflows.filter((w) => w.state !== 'ok')
+                  )[0];
+                  return first ? (
+                    <span>
+                      {first.name}: {first.error}
+                    </span>
+                  ) : null;
+                })()}
+                <button
+                  type="button"
+                  className="underline ml-2"
+                  onClick={() => setWorkflowStatusOpen(true)}
+                >
+                  Show all
+                </button>
+              </AlertDescription>
+            </Alert>
+          )}
+          <WorkflowStatusDialog
+            open={workflowStatusOpen}
+            onOpenChange={setWorkflowStatusOpen}
+            status={workflow_status}
+          />
+        </>
       )}
 
       <div className="flex-1 min-h-0">{attemptArea}</div>
