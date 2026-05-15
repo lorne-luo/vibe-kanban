@@ -64,7 +64,10 @@ pub fn router(_deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
     Router::new()
         .route("/projects/{project_id}/kanban/poll-now", post(poll_now))
         .route("/tasks/{task_id}/kanban/approve", post(approve))
-        .route("/tasks/{task_id}/kanban/request-changes", post(request_changes))
+        .route(
+            "/tasks/{task_id}/kanban/request-changes",
+            post(request_changes),
+        )
         .route("/tasks/{task_id}/kanban/cancel", post(cancel))
         .route("/tasks/{task_id}/kanban/retry-error", post(retry_error))
         .route("/tasks/{task_id}/kanban/events", get(events))

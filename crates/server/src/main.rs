@@ -72,9 +72,7 @@ async fn main() -> Result<(), VibeKanbanError> {
         .map_err(DeploymentError::from)?;
     if std::env::var("VK_DISABLE_KANBAN_ORCHESTRATOR").is_ok() {
         tracing::info!("Kanban orchestrator disabled by VK_DISABLE_KANBAN_ORCHESTRATOR");
-    } else if let Err(err) =
-        kanban_orchestrator::runtime::start(deployment.db().clone()).await
-    {
+    } else if let Err(err) = kanban_orchestrator::runtime::start(deployment.db().clone()).await {
         tracing::warn!(?err, "Kanban orchestrator did not start");
     }
 

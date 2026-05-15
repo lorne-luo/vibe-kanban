@@ -5,10 +5,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { CheckCircle2, XCircle } from 'lucide-react';
-import type {
-  ProjectWorkflowStatus,
-  WorkflowEntryState,
-} from 'shared/types';
+import type { ProjectWorkflowStatus, WorkflowEntryState } from 'shared/types';
 
 interface Props {
   open: boolean;

@@ -15,8 +15,8 @@
 ## File Structure
 
 **Created:**
-- `crates/services/src/services/workflow_status.rs` — types + `compute_for_project`
-- `crates/services/tests/workflow_status_test.rs` — service unit tests
+- `crates/kanban-orchestrator/src/workflow_status.rs` — types + `compute_for_project` (lives here, not in `services`, to avoid a cycle: `kanban-orchestrator` already depends on `services`)
+- `crates/kanban-orchestrator/tests/workflow_status_test.rs` — service unit tests
 - `frontend/src/components/projects/WorkflowStatusBadge.tsx` — UI component
 - `frontend/src/components/projects/WorkflowStatusBadge.test.tsx` — vitest snapshot
 - `frontend/src/components/projects/WorkflowStatusDialog.tsx` — details modal (kanban page)
@@ -139,7 +139,7 @@ git commit -m "refactor(kanban): expose load_workflow_with_env_probe for B-only 
 ## Task 2: Add `workflow_status` service module skeleton
 
 **Files:**
-- Create: `crates/services/src/services/workflow_status.rs`
+- Create: `crates/kanban-orchestrator/src/workflow_status.rs`
 - Modify: `crates/services/src/services/mod.rs`
 - Modify: `crates/services/Cargo.toml`
 
@@ -155,7 +155,7 @@ kanban-orchestrator = { path = "../kanban-orchestrator" }
 
 - [ ] **Step 2: Create the module file**
 
-Create `crates/services/src/services/workflow_status.rs` with:
+Create `crates/kanban-orchestrator/src/workflow_status.rs` with:
 
 ```rust
 use chrono::{DateTime, Utc};
@@ -378,7 +378,7 @@ Expected: success. If `db` import path is wrong, fix to match the existing patte
 - [ ] **Step 5: Commit**
 
 ```bash
-git add crates/services/Cargo.toml crates/services/src/services/mod.rs crates/services/src/services/workflow_status.rs
+git add crates/services/Cargo.toml crates/services/src/services/mod.rs crates/kanban-orchestrator/src/workflow_status.rs
 git commit -m "feat(services): scaffold workflow_status module"
 ```
 
@@ -387,17 +387,17 @@ git commit -m "feat(services): scaffold workflow_status module"
 ## Task 3: Service unit tests
 
 **Files:**
-- Create: `crates/services/tests/workflow_status_test.rs`
+- Create: `crates/kanban-orchestrator/tests/workflow_status_test.rs`
 
 Each subtest builds a tempdir-backed `Repo` via direct struct construction (we don't need DB for `compute_for_repo`) and asserts a specific outcome.
 
 - [ ] **Step 1: Write failing tests**
 
-Create `crates/services/tests/workflow_status_test.rs`:
+Create `crates/kanban-orchestrator/tests/workflow_status_test.rs`:
 
 ```rust
 use db::models::repo::Repo;
-use services::services::workflow_status::{
+use kanban_orchestrator::workflow_status::{
     aggregate_project_state, compute_for_repo, ProjectWorkflowState, RepoWorkflowState,
     WorkflowEntryState,
 };
@@ -514,7 +514,7 @@ async fn yml_with_dangling_next_is_invalid_yaml() {
 #[test]
 fn aggregate_invalid_wins() {
     let make = |s: RepoWorkflowState| {
-        services::services::workflow_status::RepoWorkflowStatus {
+        kanban_orchestrator::workflow_status::RepoWorkflowStatus {
             repo_id: uuid::Uuid::nil(),
             repo_name: "r".into(),
             workflows_dir: "/tmp".into(),
@@ -533,7 +533,7 @@ fn aggregate_invalid_wins() {
 #[test]
 fn aggregate_all_not_configured() {
     let make = |s: RepoWorkflowState| {
-        services::services::workflow_status::RepoWorkflowStatus {
+        kanban_orchestrator::workflow_status::RepoWorkflowStatus {
             repo_id: uuid::Uuid::nil(),
             repo_name: "r".into(),
             workflows_dir: "/tmp".into(),
@@ -561,7 +561,7 @@ Expected: all 8 tests pass. If `compute_for_repo` / `aggregate_project_state` ar
 - [ ] **Step 3: Commit**
 
 ```bash
-git add crates/services/tests/workflow_status_test.rs crates/services/src/services/workflow_status.rs
+git add crates/kanban-orchestrator/tests/workflow_status_test.rs crates/kanban-orchestrator/src/workflow_status.rs
 git commit -m "test(services): workflow_status coverage for repo states and aggregation"
 ```
 
@@ -581,12 +581,12 @@ Note the existing pattern (likely calls to `export_to!` or `Type::export`).
 
 In `crates/server/src/bin/generate_types.rs`, add exports for each of:
 
-- `services::services::workflow_status::ProjectWorkflowStatus`
-- `services::services::workflow_status::RepoWorkflowStatus`
-- `services::services::workflow_status::WorkflowEntry`
-- `services::services::workflow_status::ProjectWorkflowState`
-- `services::services::workflow_status::RepoWorkflowState`
-- `services::services::workflow_status::WorkflowEntryState`
+- `kanban_orchestrator::workflow_status::ProjectWorkflowStatus`
+- `kanban_orchestrator::workflow_status::RepoWorkflowStatus`
+- `kanban_orchestrator::workflow_status::WorkflowEntry`
+- `kanban_orchestrator::workflow_status::ProjectWorkflowState`
+- `kanban_orchestrator::workflow_status::RepoWorkflowState`
+- `kanban_orchestrator::workflow_status::WorkflowEntryState`
 
 …using the same export macro/function the file already uses (mirror an existing line, e.g. the `Project` export).
 
@@ -621,7 +621,7 @@ git commit -m "chore(types): export workflow_status types"
 Add near the top of `crates/server/src/routes/projects.rs` (after imports):
 
 ```rust
-use services::services::workflow_status::{self, ProjectWorkflowStatus};
+use kanban_orchestrator::workflow_status::{self, ProjectWorkflowStatus};
 
 #[derive(Debug, serde::Serialize, ts_rs::TS)]
 pub struct ProjectWithStatus {
