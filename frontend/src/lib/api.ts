@@ -99,6 +99,7 @@ import {
   CreateFromPrError,
   MigrationRequest,
   MigrationResponse,
+  ProjectWithStatus,
 } from 'shared/types';
 import type { Project as RemoteProject } from 'shared/remote-types';
 import type { WorkspaceWithSession } from '@/types/attempt';
@@ -256,12 +257,12 @@ export const projectsApi = {
     return handleApiResponse<Project[]>(response);
   },
 
-  create: async (data: CreateProject): Promise<Project> => {
+  create: async (data: CreateProject): Promise<ProjectWithStatus> => {
     const response = await makeRequest('/api/projects', {
       method: 'POST',
       body: JSON.stringify(data),
     });
-    return handleApiResponse<Project>(response);
+    return handleApiResponse<ProjectWithStatus>(response);
   },
 
   update: async (id: string, data: UpdateProject): Promise<Project> => {

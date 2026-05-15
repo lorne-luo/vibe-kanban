@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Toaster } from 'sonner';
 import {
   BrowserRouter,
   Navigate,
@@ -280,6 +281,7 @@ function App() {
           </ProjectProvider>
         </ClickedElementsProvider>
       </UserSystemProvider>
+      <Toaster richColors />
     </BrowserRouter>
   );
 }

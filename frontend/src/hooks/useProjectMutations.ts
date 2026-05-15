@@ -1,9 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/api';
-import type { CreateProject, UpdateProject, Project } from 'shared/types';
+import type {
+  CreateProject,
+  UpdateProject,
+  Project,
+  ProjectWithStatus,
+} from 'shared/types';
 
 interface UseProjectMutationsOptions {
-  onCreateSuccess?: (project: Project) => void;
+  onCreateSuccess?: (project: ProjectWithStatus) => void;
   onCreateError?: (err: unknown) => void;
   onUpdateSuccess?: (project: Project) => void;
   onUpdateError?: (err: unknown) => void;
@@ -15,7 +20,7 @@ export function useProjectMutations(options?: UseProjectMutationsOptions) {
   const createProject = useMutation({
     mutationKey: ['createProject'],
     mutationFn: (data: CreateProject) => projectsApi.create(data),
-    onSuccess: (project: Project) => {
+    onSuccess: (project: ProjectWithStatus) => {
       queryClient.setQueryData(['project', project.id], project);
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       options?.onCreateSuccess?.(project);

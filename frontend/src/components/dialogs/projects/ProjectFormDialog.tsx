@@ -1,4 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -8,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
-import { CreateProject, Project } from 'shared/types';
+import { CreateProject, ProjectWithStatus } from 'shared/types';
 import NiceModal, { useModal } from '@ebay/nice-modal-react';
 import { useProjectMutations } from '@/hooks/useProjectMutations';
 import { defineModal } from '@/lib/modals';
@@ -17,16 +19,28 @@ import { RepoPickerDialog } from '@/components/dialogs/shared/RepoPickerDialog';
 export interface ProjectFormDialogProps {}
 
 export type ProjectFormDialogResult =
-  | { status: 'saved'; project: Project }
+  | { status: 'saved'; project: ProjectWithStatus }
   | { status: 'canceled' };
 
 const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(() => {
   const modal = useModal();
+  const navigate = useNavigate();
 
   const { createProject } = useProjectMutations({
     onCreateSuccess: (project) => {
       modal.resolve({ status: 'saved', project } as ProjectFormDialogResult);
       modal.hide();
+      if (project.workflow_status?.state === 'invalid') {
+        toast.warning(
+          'Workflow agent not ready — check .agents/kanban-workflows/',
+          {
+            action: {
+              label: 'Details',
+              onClick: () => navigate(`/local-projects/${project.id}/tasks`),
+            },
+          }
+        );
+      }
     },
     onCreateError: () => {},
   });
