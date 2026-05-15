@@ -19,17 +19,50 @@ use db::models::{
 };
 use deployment::Deployment;
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
+use kanban_orchestrator::workflow_status::{self, ProjectWorkflowStatus};
 use services::services::{file_search::SearchQuery, project::ProjectServiceError};
 use utils::response::ApiResponse;
 use uuid::Uuid;
 
 use crate::{DeploymentImpl, error::ApiError, middleware::load_project_middleware};
 
+#[derive(Debug, serde::Serialize, ts_rs::TS)]
+pub struct ProjectWithStatus {
+    #[serde(flatten)]
+    pub project: Project,
+    pub workflow_status: ProjectWorkflowStatus,
+}
+
+async fn with_status(
+    pool: &sqlx::SqlitePool,
+    project: Project,
+) -> Result<ProjectWithStatus, ApiError> {
+    let workflow_status = workflow_status::compute_for_project(pool, project.id)
+        .await
+        .map_err(|e| match e {
+            kanban_orchestrator::workflow_status::WorkflowStatusError::Database(db_err) => {
+                tracing::error!(
+                    "workflow status compute failed for {}: {db_err}",
+                    project.id
+                );
+                ApiError::Database(db_err)
+            }
+        })?;
+    Ok(ProjectWithStatus {
+        project,
+        workflow_status,
+    })
+}
+
 pub async fn get_projects(
     State(deployment): State<DeploymentImpl>,
-) -> Result<ResponseJson<ApiResponse<Vec<Project>>>, ApiError> {
+) -> Result<ResponseJson<ApiResponse<Vec<ProjectWithStatus>>>, ApiError> {
     let projects = Project::find_all(&deployment.db().pool).await?;
-    Ok(ResponseJson(ApiResponse::success(projects)))
+    let mut results = Vec::with_capacity(projects.len());
+    for p in projects {
+        results.push(with_status(&deployment.db().pool, p).await?);
+    }
+    Ok(ResponseJson(ApiResponse::success(results)))
 }
 
 pub async fn stream_projects_ws(
@@ -76,14 +109,16 @@ async fn handle_projects_ws(socket: WebSocket, deployment: DeploymentImpl) -> an
 
 pub async fn get_project(
     Extension(project): Extension<Project>,
-) -> Result<ResponseJson<ApiResponse<Project>>, ApiError> {
-    Ok(ResponseJson(ApiResponse::success(project)))
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<ProjectWithStatus>>, ApiError> {
+    let response = with_status(&deployment.db().pool, project).await?;
+    Ok(ResponseJson(ApiResponse::success(response)))
 }
 
 pub async fn create_project(
     State(deployment): State<DeploymentImpl>,
     Json(payload): Json<CreateProject>,
-) -> Result<ResponseJson<ApiResponse<Project>>, ApiError> {
+) -> Result<ResponseJson<ApiResponse<ProjectWithStatus>>, ApiError> {
     tracing::debug!("Creating project '{}'", payload.name);
     let repo_count = payload.repositories.len();
 
@@ -105,7 +140,8 @@ pub async fn create_project(
                 )
                 .await;
 
-            Ok(ResponseJson(ApiResponse::success(project)))
+            let response = with_status(&deployment.db().pool, project).await?;
+            Ok(ResponseJson(ApiResponse::success(response)))
         }
         Err(ProjectServiceError::DuplicateGitRepoPath) => Ok(ResponseJson(ApiResponse::error(
             "Duplicate repository path provided",

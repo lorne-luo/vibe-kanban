@@ -40,6 +40,8 @@ export type UpdateTag = { tag_name: string | null, content: string | null, };
 
 export type TaskStatus = "todo" | "inprogress" | "inreview" | "done" | "cancelled";
 
+export type PhaseState = "idle" | "running" | "awaiting_review" | "error" | "archived";
+
 export type Task = { id: string, project_id: string, title: string, description: string | null, status: TaskStatus, parent_workspace_id: string | null, created_at: string, updated_at: string, jira_key: string | null, jira_snapshot: string | null, jira_synced_at: string | null, kanban_phase: string | null, phase_state: PhaseState, current_turn: bigint, last_executor_session_id: string | null, review_pending_since: string | null, error_info: string | null, pending_inject: string | null, };
 
 export type TaskWithAttemptStatus = { has_in_progress_attempt: boolean, last_attempt_failed: boolean, executor: string, id: string, project_id: string, title: string, description: string | null, status: TaskStatus, parent_workspace_id: string | null, created_at: string, updated_at: string, jira_key: string | null, jira_snapshot: string | null, jira_synced_at: string | null, kanban_phase: string | null, phase_state: PhaseState, current_turn: bigint, last_executor_session_id: string | null, review_pending_since: string | null, error_info: string | null, pending_inject: string | null, };
@@ -247,6 +249,8 @@ export type MigrationReport = { projects: EntityReport, tasks: EntityReport, pr_
 export type EntityReport = { total: number, migrated: number, failed: number, skipped: number, errors: Array<EntityError>, };
 
 export type EntityError = { local_id: string, error: string, };
+
+export type ProjectWithStatus = { workflow_status: ProjectWorkflowStatus, id: string, name: string, default_agent_working_dir: string | null, remote_project_id: string | null, created_at: Date, updated_at: Date, };
 
 export type RegisterRepoRequest = { path: string, display_name: string | null, };
 
