@@ -1,3 +1,4 @@
+pub mod adf;
 pub mod api;
 pub mod config;
 pub mod context;

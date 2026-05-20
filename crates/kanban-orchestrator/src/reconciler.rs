@@ -94,21 +94,33 @@ pub async fn upsert_card_from_jira(
     // Create new card
     let id = Uuid::new_v4();
     let id_bytes = id.as_bytes().to_vec();
+    // Prefer the column whose jira_status matches the issue's status; fall back
+    // to the workflow's initial column when no mapping is configured.
     let initial = workflow
         .initial_column()
         .ok_or_else(|| crate::OrchestratorError::Workflow("no initial column".into()))?;
+    let target_column = workflow
+        .column_for_jira_status(&issue.fields.status.name)
+        .unwrap_or(initial);
+    let title = format!("{} {}", issue.key, issue.fields.summary);
+    let description = issue
+        .fields
+        .description
+        .as_ref()
+        .map(crate::adf::to_markdown)
+        .filter(|s| !s.is_empty());
     sqlx::query(
         "INSERT INTO tasks (id, project_id, title, description, status, jira_key, jira_snapshot, jira_synced_at, kanban_phase, phase_state, current_turn, created_at, updated_at) \
          VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, ?, 'idle', 0, ?, ?)",
     )
     .bind(id_bytes)
     .bind(project_id_bytes)
-    .bind(&issue.fields.summary)
-    .bind(serde_json::to_string(&issue.fields.description).ok())
+    .bind(&title)
+    .bind(description)
     .bind(&issue.key)
     .bind(&snapshot_json)
     .bind(&now_str)
-    .bind(&initial.name)
+    .bind(&target_column.name)
     .bind(&now_str)
     .bind(&now_str)
     .execute(pool)
@@ -117,7 +129,7 @@ pub async fn upsert_card_from_jira(
     Ok(UpsertOutcome {
         task_id: id,
         created: true,
-        kanban_phase: Some(initial.name.clone()),
+        kanban_phase: Some(target_column.name.clone()),
         diff: None,
     })
 }

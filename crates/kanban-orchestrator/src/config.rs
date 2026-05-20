@@ -173,6 +173,17 @@ impl Workflow {
     pub fn column(&self, name: &str) -> Option<&Column> {
         self.columns.iter().find(|c| c.name == name)
     }
+
+    /// Find the column whose `jira_status` list contains the given Jira status name.
+    /// Comparison is case-insensitive after trimming whitespace.
+    pub fn column_for_jira_status(&self, status: &str) -> Option<&Column> {
+        let needle = status.trim().to_ascii_lowercase();
+        self.columns.iter().find(|c| {
+            c.jira_status
+                .iter()
+                .any(|s| s.trim().to_ascii_lowercase() == needle)
+        })
+    }
 }
 
 pub fn load_workflow_with_env_probe(
