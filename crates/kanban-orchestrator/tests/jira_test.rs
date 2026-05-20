@@ -6,8 +6,8 @@ use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
 #[tokio::test]
 async fn search_returns_issues() {
     let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/rest/api/3/search"))
+    Mock::given(method("POST"))
+        .and(path("/rest/api/3/search/jql"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "issues": [{
                 "key": "AP-1",
@@ -21,7 +21,8 @@ async fn search_returns_issues() {
                     "priority": null,
                     "attachment": []
                 }
-            }]
+            }],
+            "isLast": true
         })))
         .mount(&server)
         .await;

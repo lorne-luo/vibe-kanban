@@ -117,8 +117,8 @@ async fn e2e_poll_dispatch_review_done() {
     let server = MockServer::start().await;
 
     // Jira search always returns AP-E2E-1 in "To Do"
-    Mock::given(method("GET"))
-        .and(path("/rest/api/3/search"))
+    Mock::given(method("POST"))
+        .and(path("/rest/api/3/search/jql"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "issues": [{
                 "key": "AP-E2E-1",
@@ -132,7 +132,8 @@ async fn e2e_poll_dispatch_review_done() {
                     "priority": null,
                     "attachment": []
                 }
-            }]
+            }],
+            "isLast": true
         })))
         .mount(&server)
         .await;

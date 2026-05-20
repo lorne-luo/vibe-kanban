@@ -3,6 +3,8 @@ use server::DeploymentImpl;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let _ = dotenv::dotenv();
+
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
         .ok();

@@ -115,25 +115,60 @@ impl JiraClient {
     }
 
     pub async fn search(&self, jql: &str) -> crate::Result<Vec<JiraIssue>> {
+        // Jira Cloud removed /rest/api/3/search (HTTP 410) in 2025 in favour of
+        // the cursor-paginated /rest/api/3/search/jql endpoint.
+        // Docs: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/
+        //
+        // Notes:
+        //  - `fields` must be specified explicitly; if omitted only `id` comes back.
+        //  - `maxResults` is capped at 100.
+        //  - Pagination is via `nextPageToken` cursor; loop until it is None.
         #[derive(Deserialize)]
         struct Resp {
+            #[serde(default)]
             issues: Vec<JiraIssue>,
+            #[serde(default)]
+            #[serde(rename = "nextPageToken")]
+            next_page_token: Option<String>,
         }
-        let url = format!("{}/rest/api/3/search", self.base);
-        let resp: Resp = self
-            .http
-            .get(&url)
-            .basic_auth(&self.email, Some(&self.token))
-            .query(&[("jql", jql), ("maxResults", "200")])
-            .send()
-            .await
-            .map_err(|e| crate::OrchestratorError::Jira(e.to_string()))?
-            .error_for_status()
-            .map_err(|e| crate::OrchestratorError::Jira(e.to_string()))?
-            .json()
-            .await
-            .map_err(|e| crate::OrchestratorError::Jira(e.to_string()))?;
-        Ok(resp.issues)
+
+        let url = format!("{}/rest/api/3/search/jql", self.base);
+        let fields = "summary,status,assignee,description,labels,priority,comment,attachment";
+
+        let mut all = Vec::new();
+        let mut next_token: Option<String> = None;
+        loop {
+            let mut body = serde_json::json!({
+                "jql": jql,
+                "fields": fields.split(',').collect::<Vec<_>>(),
+                "maxResults": 100,
+            });
+            if let Some(tok) = &next_token {
+                body["nextPageToken"] = serde_json::Value::String(tok.clone());
+            }
+
+            let resp: Resp = self
+                .http
+                .post(&url)
+                .basic_auth(&self.email, Some(&self.token))
+                .header("Accept", "application/json")
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| crate::OrchestratorError::Jira(e.to_string()))?
+                .error_for_status()
+                .map_err(|e| crate::OrchestratorError::Jira(e.to_string()))?
+                .json()
+                .await
+                .map_err(|e| crate::OrchestratorError::Jira(e.to_string()))?;
+
+            all.extend(resp.issues);
+            match resp.next_page_token {
+                Some(tok) if !tok.is_empty() => next_token = Some(tok),
+                _ => break,
+            }
+        }
+        Ok(all)
     }
 
     pub async fn transition(&self, key: &str, transition_name: &str) -> crate::Result<()> {

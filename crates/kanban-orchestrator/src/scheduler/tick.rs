@@ -42,6 +42,12 @@ impl OrchestratorContext {
 pub async fn do_tick(ctx: &OrchestratorContext) -> crate::Result<()> {
     // 1) Poll Jira
     let issues = ctx.jira.search(&ctx.workflow.sync.jira.jql).await?;
+    tracing::info!(
+        project = %ctx.workflow.project,
+        jql = %ctx.workflow.sync.jira.jql,
+        issue_count = issues.len(),
+        "jira search complete"
+    );
 
     // 2) Reconcile each issue
     for issue in &issues {
