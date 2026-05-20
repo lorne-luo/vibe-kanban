@@ -79,7 +79,12 @@ pub async fn poll_once(db: &DBService, project: String) -> crate::Result<()> {
             Err(_) => continue,
         };
         let repo_root = std::path::PathBuf::from(&working_dir);
-        let workflow = match crate::config::load_workflow(&repo_root, &project) {
+        let env_probe = |name: &str| -> bool {
+            crate::scheduler::tick::read_repo_env(&repo_root, name).is_some()
+                || std::env::var(name).is_ok()
+        };
+        let workflow =
+            match crate::config::load_workflow_with_env_probe(&repo_root, &project, &env_probe) {
             Ok(w) => w,
             Err(e) => {
                 tracing::warn!(?e, project, "workflow not found, skipping");

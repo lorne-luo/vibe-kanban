@@ -421,6 +421,43 @@ async fn advance_card(
     Ok(())
 }
 
+/// Read a single `KEY=value` pair out of `<repo_root>/.env` without mutating
+/// the process environment. Strips wrapping single/double quotes. Returns
+/// `None` if the file or key is missing.
+pub fn read_repo_env(repo_root: &std::path::Path, key: &str) -> Option<String> {
+    let path = repo_root.join(".env");
+    let contents = std::fs::read_to_string(&path).ok()?;
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let stripped = line.strip_prefix("export ").unwrap_or(line);
+        let (k, v) = match stripped.split_once('=') {
+            Some(p) => p,
+            None => continue,
+        };
+        if k.trim() == key {
+            let v = v.trim();
+            let v = v
+                .strip_prefix('"')
+                .and_then(|s| s.strip_suffix('"'))
+                .or_else(|| v.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))
+                .unwrap_or(v);
+            return Some(v.to_string());
+        }
+    }
+    None
+}
+
+/// Resolve an env var, preferring the project's own `.env` over the
+/// process-level environment.
+fn resolve_env(repo_root: &std::path::Path, key: &str) -> String {
+    read_repo_env(repo_root, key)
+        .or_else(|| std::env::var(key).ok())
+        .unwrap_or_default()
+}
+
 /// Run a single tick for one project given its workflow and repo root.
 pub async fn do_tick_for_project(
     db: &DBService,
@@ -428,8 +465,8 @@ pub async fn do_tick_for_project(
     repo_root: &PathBuf,
     workflow: Workflow,
 ) -> crate::Result<()> {
-    let email = std::env::var(&workflow.sync.jira.auth_env.email).unwrap_or_default();
-    let token = std::env::var(&workflow.sync.jira.auth_env.token).unwrap_or_default();
+    let email = resolve_env(repo_root, &workflow.sync.jira.auth_env.email);
+    let token = resolve_env(repo_root, &workflow.sync.jira.auth_env.token);
     let jira = Arc::new(JiraClient::new(
         workflow.sync.jira.site.clone(),
         email,
@@ -508,7 +545,14 @@ pub async fn do_all_projects_tick(db: &DBService) -> crate::Result<()> {
                 Some(k) => k.to_string(),
                 None => continue,
             };
-            let workflow = match crate::config::load_workflow(&repo_root, &project_key) {
+            let env_probe = |name: &str| -> bool {
+                read_repo_env(&repo_root, name).is_some() || std::env::var(name).is_ok()
+            };
+            let workflow = match crate::config::load_workflow_with_env_probe(
+                &repo_root,
+                &project_key,
+                &env_probe,
+            ) {
                 Ok(w) => w,
                 Err(e) => {
                     tracing::warn!(?e, project = %project_key, "failed to load workflow");
