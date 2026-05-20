@@ -114,6 +114,31 @@ impl JiraClient {
         }
     }
 
+    /// Verify the configured credentials by calling /myself. Returns a typed
+    /// error when the token is rejected so the orchestrator does not silently
+    /// fall back to the empty-issues response that /search/jql gives to
+    /// unauthenticated callers.
+    pub async fn verify_auth(&self) -> crate::Result<()> {
+        let url = format!("{}/rest/api/3/myself", self.base);
+        let resp = self
+            .http
+            .get(&url)
+            .basic_auth(&self.email, Some(&self.token))
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .map_err(|e| crate::OrchestratorError::Jira(e.to_string()))?;
+        let status = resp.status();
+        if status.is_success() {
+            return Ok(());
+        }
+        let body = resp.text().await.unwrap_or_default();
+        Err(crate::OrchestratorError::Jira(format!(
+            "jira auth check failed at {}: HTTP {} — {} (check JIRA_EMAIL / JIRA_TOKEN and that the account has access to {})",
+            url, status, body.trim(), self.base
+        )))
+    }
+
     pub async fn search(&self, jql: &str) -> crate::Result<Vec<JiraIssue>> {
         // Jira Cloud removed /rest/api/3/search (HTTP 410) in 2025 in favour of
         // the cursor-paginated /rest/api/3/search/jql endpoint.

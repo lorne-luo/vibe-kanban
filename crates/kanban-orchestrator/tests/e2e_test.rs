@@ -116,6 +116,16 @@ async fn fetch_task_state(pool: &sqlx::SqlitePool, task_id: Uuid) -> (String, St
 async fn e2e_poll_dispatch_review_done() {
     let server = MockServer::start().await;
 
+    // /myself preflight: always authenticated in tests
+    Mock::given(method("GET"))
+        .and(path("/rest/api/3/myself"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "accountId": "test-account",
+            "emailAddress": "test@example.com"
+        })))
+        .mount(&server)
+        .await;
+
     // Jira search always returns AP-E2E-1 in "To Do"
     Mock::given(method("POST"))
         .and(path("/rest/api/3/search/jql"))

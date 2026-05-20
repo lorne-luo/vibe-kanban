@@ -40,6 +40,11 @@ impl OrchestratorContext {
 }
 
 pub async fn do_tick(ctx: &OrchestratorContext) -> crate::Result<()> {
+    // 0) Verify credentials. /search/jql is permissive and returns an empty
+    //    array even for unauthenticated callers, which masks bad tokens; the
+    //    /myself probe surfaces 401s loudly so users see the real cause.
+    ctx.jira.verify_auth().await?;
+
     // 1) Poll Jira
     let issues = ctx.jira.search(&ctx.workflow.sync.jira.jql).await?;
     tracing::info!(
